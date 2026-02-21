@@ -7,10 +7,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
 import TopDrivers from '@/components/TopDrivers';
 import FeedbackButtons from '@/components/FeedbackButtons';
 import RiskBadge from '@/components/RiskBadge';
-import { ArrowLeft, Lock, Unlock, RotateCcw, CheckCircle2, Edit3, X } from 'lucide-react';
+import { ArrowLeft, Lock, Unlock, RotateCcw, CheckCircle2, Edit3, X, User } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Props {
@@ -27,6 +28,16 @@ interface PlanSession {
   notes?: string;
 }
 
+interface ExtraSession {
+  id: string;
+  day: string;
+  session_type: string;
+  intensity: string;
+  duration: number;
+  notes: string | null;
+  week_start: string;
+}
+
 export default function CoachAthleteDetail({ athleteId, athleteName, onBack }: Props) {
   const { user } = useAuth();
   const [plan, setPlan] = useState<any>(null);
@@ -37,6 +48,7 @@ export default function CoachAthleteDetail({ athleteId, athleteName, onBack }: P
   const [editingDay, setEditingDay] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<Partial<PlanSession>>({});
   const [report, setReport] = useState<any>(null);
+  const [extraSessions, setExtraSessions] = useState<ExtraSession[]>([]);
 
   const loadPlan = async () => {
     const [planRes, reportRes] = await Promise.all([
@@ -50,6 +62,15 @@ export default function CoachAthleteDetail({ athleteId, athleteName, onBack }: P
       setIsLocked(planRes.data.locked_by_coach || false);
     }
     if (reportRes.data) setReport(reportRes.data);
+
+    // Fetch athlete extra sessions
+    const { data: extras } = await supabase
+      .from('athlete_extra_sessions')
+      .select('id, day, session_type, intensity, duration, notes, week_start')
+      .eq('athlete_id', athleteId)
+      .order('created_at', { ascending: false });
+    setExtraSessions((extras as ExtraSession[]) || []);
+
     setLoading(false);
   };
 
@@ -242,6 +263,38 @@ export default function CoachAthleteDetail({ athleteId, athleteName, onBack }: P
                 weeklyPlanId={plan.id}
                 agentRunId={plan.agent_run_id}
               />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Athlete Extra Sessions */}
+      {extraSessions.length > 0 && (
+        <Card className="border-border">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg font-heading flex items-center gap-2">
+              <User className="h-5 w-5 text-accent-foreground" />
+              Athlete-Added Sessions
+              <Badge variant="secondary" className="text-[10px] uppercase tracking-wider">Read-only</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {extraSessions.map(extra => (
+                <div key={extra.id} className="flex items-center justify-between bg-accent/20 border border-accent/30 rounded-lg px-4 py-3 text-sm">
+                  <div className="flex items-center gap-3">
+                    <span className="font-medium w-24">{extra.day}</span>
+                    <span>{extra.session_type}</span>
+                    <span className={extra.intensity === 'High' ? 'text-destructive' : extra.intensity === 'Medium' ? 'risk-medium' : 'text-primary'}>
+                      {extra.intensity}
+                    </span>
+                    <span className="text-muted-foreground">{extra.duration}m</span>
+                  </div>
+                  {extra.notes && (
+                    <span className="text-xs text-muted-foreground italic max-w-[200px] truncate">{extra.notes}</span>
+                  )}
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>

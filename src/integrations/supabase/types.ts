@@ -85,6 +85,42 @@ export type Database = {
         }
         Relationships: []
       }
+      athlete_extra_sessions: {
+        Row: {
+          athlete_id: string
+          created_at: string
+          day: string
+          duration: number
+          id: string
+          intensity: string
+          notes: string | null
+          session_type: string
+          week_start: string
+        }
+        Insert: {
+          athlete_id: string
+          created_at?: string
+          day: string
+          duration?: number
+          id?: string
+          intensity?: string
+          notes?: string | null
+          session_type?: string
+          week_start: string
+        }
+        Update: {
+          athlete_id?: string
+          created_at?: string
+          day?: string
+          duration?: number
+          id?: string
+          intensity?: string
+          notes?: string | null
+          session_type?: string
+          week_start?: string
+        }
+        Relationships: []
+      }
       athlete_profiles: {
         Row: {
           coach_id: string | null
