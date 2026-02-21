@@ -5,16 +5,17 @@ import AppLayout from '@/components/AppLayout';
 import RiskBadge from '@/components/RiskBadge';
 import FeedbackButtons from '@/components/FeedbackButtons';
 import SessionLogDialog from '@/components/SessionLogDialog';
+import ExtraSessionDialog from '@/components/ExtraSessionDialog';
 import {
   generateDefaultPlan, adjustPlan, generateExplanation,
   getCurrentPhase, calculateAcuteChronicRatio, calculateSorenessContribution,
   calculateRiskScore, type PlanSession, type MenstrualPhase,
 } from '@/lib/riskEngine';
-import { ClipboardList, ChevronLeft, ChevronRight, Bot, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { ClipboardList, ChevronLeft, ChevronRight, Bot, ShieldCheck, CheckCircle2, Plus, User, Edit3, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { formatDistanceToNow, startOfWeek, addWeeks, format, isSameDay } from 'date-fns';
+import { formatDistanceToNow, addWeeks, format, isSameDay } from 'date-fns';
 
 interface AgentRunMeta {
   started_at: string;
@@ -29,6 +30,16 @@ interface SessionLog {
   rpe: number;
   session_type: string;
   intensity: string;
+}
+
+interface ExtraSession {
+  id: string;
+  day: string;
+  session_type: string;
+  intensity: string;
+  duration: number;
+  notes: string | null;
+  week_start: string;
 }
 
 function getWeekDates(weekStart: Date) {
@@ -68,14 +79,23 @@ export default function PlanView() {
   const isCurrentWeek = weekOffset === 0;
   const isPastWeek = weekOffset < 0;
 
-  // Session logs for the viewed week
+  // Session logs
   const [sessionLogs, setSessionLogs] = useState<SessionLog[]>([]);
+
+  // Extra sessions
+  const [extraSessions, setExtraSessions] = useState<ExtraSession[]>([]);
+  const [extraDialogOpen, setExtraDialogOpen] = useState(false);
+  const [extraDialogDay, setExtraDialogDay] = useState('Monday');
+  const [editingExtra, setEditingExtra] = useState<ExtraSession | null>(null);
 
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedSession, setSelectedSession] = useState<PlanSession | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedLog, setSelectedLog] = useState<SessionLog | null>(null);
+
+  // Add extra session day picker
+  const [addExtraOpen, setAddExtraOpen] = useState(false);
 
   const fetchSessionLogs = useCallback(async () => {
     if (!user) return;
@@ -90,9 +110,21 @@ export default function PlanView() {
     setSessionLogs(data || []);
   }, [user, viewingMonday]);
 
+  const fetchExtraSessions = useCallback(async () => {
+    if (!user) return;
+    const weekStartStr = format(viewingMonday, 'yyyy-MM-dd');
+    const { data } = await supabase
+      .from('athlete_extra_sessions')
+      .select('id, day, session_type, intensity, duration, notes, week_start')
+      .eq('athlete_id', user.id)
+      .eq('week_start', weekStartStr);
+    setExtraSessions((data as ExtraSession[]) || []);
+  }, [user, viewingMonday]);
+
   useEffect(() => {
     fetchSessionLogs();
-  }, [fetchSessionLogs]);
+    fetchExtraSessions();
+  }, [fetchSessionLogs, fetchExtraSessions]);
 
   useEffect(() => {
     if (!user) return;
@@ -166,17 +198,32 @@ export default function PlanView() {
     return sessionLogs.find(l => l.date === dateStr) || null;
   };
 
+  const getExtrasForDay = (day: string) => extraSessions.filter(s => s.day === day);
+
   const handleSessionClick = (session: PlanSession, date: Date) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const isFuture = date > today;
-    if (isFuture) return; // Can't log future sessions
+    if (isFuture) return;
 
     const log = getLogForDate(date);
     setSelectedSession(session);
     setSelectedDate(date);
     setSelectedLog(log);
     setDialogOpen(true);
+  };
+
+  const handleAddExtra = (day: string) => {
+    setExtraDialogDay(day);
+    setEditingExtra(null);
+    setExtraDialogOpen(true);
+  };
+
+  const handleEditExtra = (extra: ExtraSession, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExtraDialogDay(extra.day);
+    setEditingExtra(extra);
+    setExtraDialogOpen(true);
   };
 
   if (loading) {
@@ -198,6 +245,8 @@ export default function PlanView() {
     return 'bg-primary/20 text-primary border-primary/30';
   };
 
+  const isCoachPlan = planOwnerType === 'coach';
+
   return (
     <AppLayout>
       <div className="max-w-4xl mx-auto space-y-6">
@@ -207,7 +256,7 @@ export default function PlanView() {
             <h1 className="text-3xl font-heading font-bold flex items-center gap-3">
               <ClipboardList className="h-8 w-8 text-primary" />
               TRAINING PLAN
-              {planOwnerType === 'coach' && (
+              {isCoachPlan && (
                 <Badge variant="secondary" className="ml-2 gap-1 text-xs font-semibold uppercase tracking-wider">
                   <ShieldCheck className="h-3.5 w-3.5" />
                   Coach Plan
@@ -217,7 +266,7 @@ export default function PlanView() {
             <p className="text-muted-foreground mt-1">
               {isPastWeek
                 ? 'Viewing past week — tap a session to review your log.'
-                : planOwnerType === 'coach'
+                : isCoachPlan
                   ? 'Coach-assigned baseline with AI adjustments. Tap to log effort.'
                   : 'AI-adjusted plan. Tap a session to log your effort.'}
             </p>
@@ -262,6 +311,7 @@ export default function PlanView() {
             const log = getLogForDate(date);
             const isFuture = date > today;
             const changed = orig && session && (orig.type !== session.type || orig.intensity !== session.intensity || orig.duration !== session.duration);
+            const extras = getExtrasForDay(day);
 
             return (
               <motion.div
@@ -293,7 +343,6 @@ export default function PlanView() {
                     <p className="text-xs text-muted-foreground text-center">{session.duration}min</p>
                     {changed && <p className="text-[10px] text-primary text-center font-medium">AI adjusted</p>}
 
-                    {/* Logged indicator */}
                     {log && (
                       <div className="mt-auto flex items-center justify-center gap-1 text-[10px] text-primary font-medium">
                         <CheckCircle2 className="h-3 w-3" />
@@ -304,6 +353,43 @@ export default function PlanView() {
                       <p className="mt-auto text-[10px] text-muted-foreground text-center">Tap to log</p>
                     )}
                   </div>
+                )}
+
+                {/* Athlete extra sessions */}
+                {extras.map(extra => (
+                  <div
+                    key={extra.id}
+                    className="relative bg-accent/30 border border-accent/50 rounded-lg p-1.5 text-center"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-center gap-1 mb-0.5">
+                      <User className="h-2.5 w-2.5 text-accent-foreground" />
+                      <span className="text-[9px] font-bold uppercase text-accent-foreground tracking-wider">Added</span>
+                    </div>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${intensityColor(extra.intensity)}`}>
+                      {extra.intensity}
+                    </span>
+                    <p className="text-[10px] font-medium mt-0.5">{extra.session_type}</p>
+                    <p className="text-[10px] text-muted-foreground">{extra.duration}m</p>
+                    {isCurrentWeek && (
+                      <button
+                        onClick={e => handleEditExtra(extra, e)}
+                        className="absolute top-1 right-1 p-0.5 rounded hover:bg-secondary/50 text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <Edit3 className="h-2.5 w-2.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+
+                {/* Add extra button */}
+                {isCurrentWeek && (
+                  <button
+                    onClick={e => { e.stopPropagation(); handleAddExtra(day); }}
+                    className="mt-auto flex items-center justify-center gap-0.5 text-[10px] text-muted-foreground hover:text-primary transition-colors py-1"
+                  >
+                    <Plus className="h-3 w-3" />
+                  </button>
                 )}
               </motion.div>
             );
@@ -339,6 +425,19 @@ export default function PlanView() {
           athleteId={user.id}
           existingLog={selectedLog}
           onLogged={fetchSessionLogs}
+        />
+      )}
+
+      {/* Extra session dialog */}
+      {user && (
+        <ExtraSessionDialog
+          open={extraDialogOpen}
+          onOpenChange={setExtraDialogOpen}
+          athleteId={user.id}
+          weekStart={viewingMonday}
+          day={extraDialogDay}
+          existing={editingExtra}
+          onSaved={fetchExtraSessions}
         />
       )}
     </AppLayout>
