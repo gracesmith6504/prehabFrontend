@@ -306,14 +306,14 @@ export default function CoachEscalations() {
     <AppLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-3">
-          <ShieldAlert className="h-6 w-6 text-primary" />
-          <h1 className="font-heading text-2xl font-bold uppercase tracking-wider">Escalation Queue</h1>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <ShieldAlert className="h-5 w-5 sm:h-6 sm:w-6 text-primary shrink-0" />
+          <h1 className="font-heading text-xl sm:text-2xl font-bold uppercase tracking-wider">Escalation Queue</h1>
         </div>
 
         {/* Tabs */}
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="bg-secondary">
+          <TabsList className="bg-secondary flex-wrap h-auto gap-1 p-1">
             <TabsTrigger value="open" className="gap-2 data-[state=active]:bg-destructive/20 data-[state=active]:text-destructive">
               <AlertTriangle className="h-3.5 w-3.5" /> New {counts.open > 0 && <Badge variant="destructive" className="ml-1 h-5 min-w-5 px-1">{counts.open}</Badge>}
             </TabsTrigger>

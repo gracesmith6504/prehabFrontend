@@ -61,10 +61,10 @@ export default function TodaysSession({ session, athleteId, existingLog, onLogge
           </Badge>
         </div>
 
-        <div className="grid grid-cols-3 gap-4 mb-5">
+        <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-5">
           <div>
             <p className="text-xs text-muted-foreground uppercase tracking-wider">Type</p>
-            <p className="font-heading font-bold text-lg mt-1">{session.type}</p>
+            <p className="font-heading font-bold text-base sm:text-lg mt-1">{session.type}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground uppercase tracking-wider">Intensity</p>
@@ -72,12 +72,12 @@ export default function TodaysSession({ session, athleteId, existingLog, onLogge
           </div>
           <div>
             <p className="text-xs text-muted-foreground uppercase tracking-wider">Duration</p>
-            <p className="font-heading font-bold text-lg mt-1">{session.duration}<span className="text-sm font-normal text-muted-foreground"> min</span></p>
+            <p className="font-heading font-bold text-base sm:text-lg mt-1">{session.duration}<span className="text-sm font-normal text-muted-foreground"> min</span></p>
           </div>
         </div>
 
         {isCompleted ? (
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+          <div className="flex items-center flex-wrap gap-3 sm:gap-4 text-sm text-muted-foreground">
             <span>RPE: <strong className="text-foreground">{existingLog.rpe}/10</strong></span>
             <span>Actual: <strong className="text-foreground">{existingLog.duration} min</strong></span>
             <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setDialogOpen(true)}>

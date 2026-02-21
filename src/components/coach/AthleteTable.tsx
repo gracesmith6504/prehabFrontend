@@ -23,6 +23,7 @@ interface Props {
 export default function AthleteTable({ athletes, onSelectAthlete }: Props) {
   return (
     <div className="glass-card overflow-hidden">
+      <div className="overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow className="border-border hover:bg-transparent">
@@ -67,6 +68,7 @@ export default function AthleteTable({ athletes, onSelectAthlete }: Props) {
           ))}
         </TableBody>
       </Table>
+      </div>
     </div>
   );
 }

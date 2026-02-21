@@ -149,7 +149,7 @@ export default function CoachAthleteDetail({ athleteId, athleteName, onBack }: P
 
       {/* Risk Summary */}
       {report && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
           <div className="glass-card p-4 text-center">
             <p className="text-xs text-muted-foreground uppercase tracking-wider">Phase</p>
             <p className="font-heading font-bold capitalize text-lg">{report.phase || 'Unknown'}</p>
@@ -191,7 +191,7 @@ export default function CoachAthleteDetail({ athleteId, athleteName, onBack }: P
             {isLocked && <p className="text-xs text-primary mt-1">🔒 Locked — Agent Runner will not modify this plan</p>}
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Original */}
               <div>
                 <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Original Plan</p>
@@ -281,9 +281,9 @@ export default function CoachAthleteDetail({ athleteId, athleteName, onBack }: P
           <CardContent>
             <div className="space-y-2">
               {extraSessions.map(extra => (
-                <div key={extra.id} className="flex items-center justify-between bg-accent/20 border border-accent/30 rounded-lg px-4 py-3 text-sm">
-                  <div className="flex items-center gap-3">
-                    <span className="font-medium w-24">{extra.day}</span>
+                <div key={extra.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-3 bg-accent/20 border border-accent/30 rounded-lg px-3 sm:px-4 py-2.5 sm:py-3 text-sm">
+                  <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                    <span className="font-medium w-20 sm:w-24">{extra.day}</span>
                     <span>{extra.session_type}</span>
                     <span className={extra.intensity === 'High' ? 'text-destructive' : extra.intensity === 'Medium' ? 'risk-medium' : 'text-primary'}>
                       {extra.intensity}

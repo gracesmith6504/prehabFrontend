@@ -333,7 +333,7 @@ export default function CoachPlans() {
         </div>
 
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="bg-secondary">
+          <TabsList className="bg-secondary flex-wrap h-auto gap-1 p-1">
             <TabsTrigger value="templates">Templates</TabsTrigger>
             <TabsTrigger value="builder">Builder</TabsTrigger>
             <TabsTrigger value="assign">Assign</TabsTrigger>
@@ -413,7 +413,7 @@ export default function CoachPlans() {
                 <div className="space-y-3">
                   <Label className="text-xs uppercase tracking-wider text-muted-foreground">Weekly Schedule</Label>
                   {builderSessions.map(session => (
-                    <div key={session.day} className="grid grid-cols-[100px_1fr_1fr_80px_1fr] gap-2 items-center bg-secondary/30 rounded-lg p-2">
+                    <div key={session.day} className="grid grid-cols-2 sm:grid-cols-[80px_1fr_1fr_70px_1fr] gap-2 items-center bg-secondary/30 rounded-lg p-2">
                       <span className="text-sm font-medium">{session.day.slice(0, 3)}</span>
                       <Select value={session.type} onValueChange={v => updateSession(session.day, 'type', v)}>
                         <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>

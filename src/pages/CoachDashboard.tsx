@@ -163,15 +163,15 @@ export default function CoachDashboard() {
     <AppLayout>
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-start justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="text-3xl font-heading font-bold flex items-center gap-3">
-              <Shield className="h-8 w-8 text-primary" />
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-heading font-bold flex items-center gap-2 sm:gap-3">
+              <Shield className="h-6 w-6 sm:h-8 sm:w-8 text-primary shrink-0" />
               COACH COMMAND CENTER
             </h1>
-            <p className="text-muted-foreground mt-1">Women's Soccer — Real-time Squad Intelligence</p>
+            <p className="text-muted-foreground text-sm mt-1">Women's Soccer — Real-time Squad Intelligence</p>
           </div>
-          <Button onClick={handleRunAgent} disabled={runningAgent} className="gap-2 font-heading uppercase tracking-wider">
+          <Button onClick={handleRunAgent} disabled={runningAgent} className="gap-2 font-heading uppercase tracking-wider w-full sm:w-auto shrink-0">
             <Play className="h-4 w-4" />
             {runningAgent ? 'Running...' : 'Run Agent'}
           </Button>
