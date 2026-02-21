@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import AppLayout from '@/components/AppLayout';
 import RiskGauge from '@/components/RiskGauge';
 import RiskBadge from '@/components/RiskBadge';
-import AgentStatus from '@/components/AgentStatus';
-import TopDrivers from '@/components/TopDrivers';
+import TodaysSession from '@/components/TodaysSession';
+import AIUpdateCard from '@/components/AIUpdateCard';
+import SimplifiedDrivers from '@/components/SimplifiedDrivers';
+import PlanChanges from '@/components/PlanChanges';
 import { motion } from 'framer-motion';
 import {
   getCurrentPhase,
@@ -15,8 +17,10 @@ import {
   calculateRiskScore,
   PHASE_MULTIPLIERS,
   type MenstrualPhase,
+  type PlanSession,
 } from '@/lib/riskEngine';
-import { Calendar, Dumbbell, HeartPulse, ClipboardList, BarChart3, AlertTriangle, TrendingUp, TrendingDown, Minus, Zap } from 'lucide-react';
+import { Calendar, ClipboardList, BarChart3, AlertTriangle, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { format } from 'date-fns';
 
 export default function Dashboard() {
   const { user, profile } = useAuth();
@@ -26,11 +30,32 @@ export default function Dashboard() {
   const [acRatio, setAcRatio] = useState(0);
   const [loading, setLoading] = useState(true);
   const [previousScore, setPreviousScore] = useState<number | null>(null);
-  const [latestActions, setLatestActions] = useState<Array<{ action_type: string; details: any; created_at: string }>>([]);
+
+  // Today's session
+  const [todaySession, setTodaySession] = useState<PlanSession | null>(null);
+  const [todayLog, setTodayLog] = useState<{ id: string; duration: number; rpe: number } | null>(null);
+
+  // AI update
+  const [lastAgentUpdate, setLastAgentUpdate] = useState<string | null>(null);
+  const [planAdjusted, setPlanAdjusted] = useState(false);
+
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const todayDay = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+
+  const fetchTodayLog = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from('training_sessions')
+      .select('id, duration, rpe')
+      .eq('athlete_id', user.id)
+      .eq('date', todayStr)
+      .maybeSingle();
+    setTodayLog(data || null);
+  }, [user, todayStr]);
 
   useEffect(() => {
     if (!user) return;
-    
+
     const compute = async () => {
       const { data: ap } = await supabase
         .from('athlete_profiles').select('*').eq('user_id', user.id).maybeSingle();
@@ -58,18 +83,55 @@ export default function Dashboard() {
         .from('risk_reports').select('risk_score').eq('athlete_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
       if (prevReports) setPreviousScore(prevReports.risk_score);
 
-      // Fetch latest agent actions
-      const { data: actions } = await supabase
-        .from('agent_actions')
-        .select('action_type, details, created_at')
+      // Get today's planned session from weekly plan
+      const { data: plan } = await supabase
+        .from('weekly_plans')
+        .select('adjusted_plan, original_plan, agent_run_id')
         .eq('athlete_id', user.id)
         .order('created_at', { ascending: false })
-        .limit(5);
-      if (actions) setLatestActions(actions as any[]);
+        .limit(1)
+        .maybeSingle();
+
+      if (plan) {
+        const adjustedPlan = (plan.adjusted_plan as unknown as PlanSession[]) || [];
+        const originalPlan = (plan.original_plan as unknown as PlanSession[]) || [];
+        const todaySess = adjustedPlan.find(s => s.day === todayDay) || null;
+        setTodaySession(todaySess);
+
+        // Check if plan was adjusted
+        const hasChanges = adjustedPlan.some(adj => {
+          const orig = originalPlan.find(o => o.day === adj.day);
+          return orig && (orig.intensity !== adj.intensity || orig.duration !== adj.duration || orig.type !== adj.type);
+        });
+        setPlanAdjusted(hasChanges);
+
+        // Get agent run time
+        if (plan.agent_run_id) {
+          const { data: run } = await supabase
+            .from('agent_runs')
+            .select('completed_at, started_at')
+            .eq('id', plan.agent_run_id)
+            .maybeSingle();
+          if (run) setLastAgentUpdate(run.completed_at || run.started_at);
+        }
+      }
+
+      // If no agent run from plan, get latest
+      if (!lastAgentUpdate) {
+        const { data: latestRun } = await supabase
+          .from('agent_runs')
+          .select('completed_at, started_at')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (latestRun) setLastAgentUpdate(latestRun.completed_at || latestRun.started_at);
+      }
 
       setLoading(false);
     };
+
     compute();
+    fetchTodayLog();
   }, [user]);
 
   const quickActions = [
@@ -80,14 +142,16 @@ export default function Dashboard() {
 
   return (
     <AppLayout>
-      <div className="max-w-4xl mx-auto space-y-8">
+      <div className="max-w-4xl mx-auto space-y-6">
+        {/* Greeting */}
         <div>
           <h1 className="text-3xl font-heading font-bold">
             WELCOME{profile?.full_name ? `, ${profile.full_name.toUpperCase()}` : ''}
           </h1>
-          <p className="text-muted-foreground mt-1">Your training intelligence at a glance.</p>
+          <p className="text-muted-foreground mt-1">Here's your training snapshot for today.</p>
         </div>
 
+        {/* High risk alert */}
         {riskLevel === 'High' && (
           <motion.div
             className="flex items-center gap-3 p-4 rounded-xl bg-destructive/10 border border-destructive/30"
@@ -95,27 +159,37 @@ export default function Dashboard() {
           >
             <AlertTriangle className="h-6 w-6 text-destructive flex-shrink-0" />
             <div className="flex-1">
-              <p className="font-bold text-destructive">HIGH INJURY RISK DETECTED</p>
-              <p className="text-sm text-muted-foreground">Your risk score is critically elevated. Consider reducing training intensity.</p>
+              <p className="font-bold text-destructive">HIGH INJURY RISK</p>
+              <p className="text-sm text-muted-foreground">Consider reducing intensity today. Your body needs extra care.</p>
             </div>
             <Link to="/risk-report" className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg text-sm font-bold">
-              View Report
+              Details
             </Link>
           </motion.div>
         )}
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="glass-card p-6 flex flex-col items-center">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-4">Injury Risk</p>
+        {/* Today's Session — prominent at top */}
+        {!loading && user && (
+          <TodaysSession
+            session={todaySession}
+            athleteId={user.id}
+            existingLog={todayLog}
+            onLogged={fetchTodayLog}
+          />
+        )}
+
+        {/* Stats Row */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="glass-card p-5 flex flex-col items-center">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-3">Injury Risk</p>
             {loading ? (
-              <div className="w-36 h-36 rounded-full bg-secondary animate-pulse" />
+              <div className="w-28 h-28 rounded-full bg-secondary animate-pulse" />
             ) : (
               <RiskGauge score={riskScore} />
             )}
-            <div className="mt-3"><RiskBadge level={riskLevel} /></div>
+            <div className="mt-2"><RiskBadge level={riskLevel} /></div>
             {previousScore !== null && (
-              <div className={`flex items-center gap-1 mt-2 text-xs font-medium ${
+              <div className={`flex items-center gap-1 mt-1.5 text-xs font-medium ${
                 riskScore > previousScore ? 'text-destructive' : riskScore < previousScore ? 'text-primary' : 'text-muted-foreground'
               }`}>
                 {riskScore > previousScore ? (
@@ -129,57 +203,40 @@ export default function Dashboard() {
             )}
           </div>
 
-          <div className="glass-card p-6">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-3">Current Phase</p>
+          <div className="glass-card p-5">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Current Phase</p>
             <p className="text-2xl font-heading font-bold capitalize text-primary">{phase}</p>
             <p className="text-sm text-muted-foreground mt-1">
-              Risk multiplier: ×{PHASE_MULTIPLIERS[phase].toFixed(1)}
+              Risk factor: ×{PHASE_MULTIPLIERS[phase].toFixed(1)}
             </p>
           </div>
 
-          <div className="glass-card p-6">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-3">Acute:Chronic Ratio</p>
+          <div className="glass-card p-5">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Training Load</p>
             <p className={`text-2xl font-heading font-bold ${acRatio > 1.5 ? 'risk-high' : acRatio > 1.2 ? 'risk-medium' : 'risk-low'}`}>
               {acRatio.toFixed(2)}
             </p>
             <p className="text-sm text-muted-foreground mt-1">
-              {acRatio > 1.5 ? 'Spike detected' : acRatio > 1.2 ? 'Slightly elevated' : 'Sweet spot'}
+              {acRatio > 1.5 ? 'Spike detected — ease off' : acRatio > 1.2 ? 'Slightly elevated' : 'In the sweet spot'}
             </p>
           </div>
         </div>
 
-        {/* Agent Status + Top Drivers */}
+        {/* AI Update + Risk Drivers */}
         {user && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <AgentStatus athleteId={user.id} />
-            <TopDrivers athleteId={user.id} />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <AIUpdateCard lastUpdated={lastAgentUpdate} planAdjusted={planAdjusted} />
+            <SimplifiedDrivers athleteId={user.id} />
           </div>
         )}
 
-        {/* Latest Agent Actions */}
-        {latestActions.length > 0 && (
-          <div className="glass-card p-5 space-y-3">
-            <div className="flex items-center gap-2">
-              <Zap className="h-5 w-5 text-primary" />
-              <h3 className="font-heading font-bold text-sm uppercase tracking-wider">Latest Agent Actions</h3>
-            </div>
-            <div className="space-y-2">
-              {latestActions.map((a, i) => (
-                <div key={i} className="flex items-center gap-3 text-sm">
-                  <span className="px-2 py-0.5 rounded-full bg-secondary text-xs font-bold uppercase">{a.action_type}</span>
-                  <span className="text-muted-foreground text-xs">
-                    {new Date(a.created_at).toLocaleString()}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Plan Changes */}
+        {user && <PlanChanges athleteId={user.id} />}
 
         {/* Quick Actions */}
         <div>
-          <h2 className="font-heading text-lg font-bold uppercase mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <h2 className="font-heading text-lg font-bold uppercase mb-3">Quick Actions</h2>
+          <div className="grid grid-cols-3 gap-3">
             {quickActions.map(a => (
               <Link key={a.path} to={a.path}
                 className="glass-card p-4 flex flex-col items-center gap-2 hover:bg-secondary/50 transition-colors group">
@@ -190,10 +247,11 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Cycle setup prompt */}
         {phase === 'unknown' && (
           <div className="glass-card p-6 border-primary/30">
             <p className="font-bold mb-1">Complete your cycle setup</p>
-            <p className="text-sm text-muted-foreground mb-3">We need your menstrual cycle data to calculate accurate risk scores.</p>
+            <p className="text-sm text-muted-foreground mb-3">We need your cycle data to personalize your risk scores.</p>
             <Link to="/cycle-setup" className="text-primary text-sm font-bold hover:underline">Set up now →</Link>
           </div>
         )}
