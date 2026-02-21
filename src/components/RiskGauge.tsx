@@ -6,9 +6,9 @@ export default function RiskGauge({ score }: { score: number }) {
   const offset = circumference - (score / 100) * circumference;
 
   return (
-    <div className="relative w-36 h-36 mx-auto">
+    <div className="relative w-28 h-28 mx-auto">
       <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
-        <circle cx="60" cy="60" r="54" stroke="hsl(0,0%,16%)" strokeWidth="8" fill="none" />
+        <circle cx="60" cy="60" r="54" className="stroke-border" strokeWidth="8" fill="none" />
         <motion.circle
           cx="60" cy="60" r="54"
           stroke={color}
