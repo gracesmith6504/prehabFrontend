@@ -25,7 +25,7 @@ import { motion } from 'framer-motion';
 import { formatDistanceToNow, format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import {
-  AlertTriangle, CheckCircle2, Eye, StickyNote, ExternalLink,
+  AlertTriangle, CheckCircle2, Eye, StickyNote,
   Clock, Activity, Zap, TrendingUp, ShieldAlert, Loader2,
   CalendarIcon, Stethoscope,
 } from 'lucide-react';
@@ -291,14 +291,27 @@ export default function CoachEscalations() {
     setDrawerLoading(false);
   };
 
-  // ── Filter ────────────────────────────────────────────────────────────
+  // ── Filter & deduplicate (latest per athlete per status) ──────────────
 
-  const filtered = escalations.filter(e => e.status === tab);
-  const counts = {
-    open: escalations.filter(e => e.status === 'open').length,
-    acknowledged: escalations.filter(e => e.status === 'acknowledged').length,
-    resolved: escalations.filter(e => e.status === 'resolved').length,
+  const deduplicateByAthlete = (list: EnrichedEscalation[]) => {
+    const seen = new Set<string>();
+    return list.filter(e => {
+      if (seen.has(e.athlete_id)) return false;
+      seen.add(e.athlete_id);
+      return true;
+    });
   };
+
+  const allByStatus = (status: string) => escalations.filter(e => e.status === status);
+  const filtered = deduplicateByAthlete(allByStatus(tab));
+  const counts = {
+    open: deduplicateByAthlete(allByStatus('open')).length,
+    acknowledged: deduplicateByAthlete(allByStatus('acknowledged')).length,
+    resolved: deduplicateByAthlete(allByStatus('resolved')).length,
+  };
+  // Count all escalations per athlete for badge
+  const countByAthlete = (athleteId: string, status: string) =>
+    escalations.filter(e => e.athlete_id === athleteId && e.status === status).length;
 
   // ── Render ────────────────────────────────────────────────────────────
 
@@ -340,11 +353,8 @@ export default function CoachEscalations() {
                       key={esc.id}
                       esc={esc}
                       index={i}
-                      onAcknowledge={() => handleAcknowledge(esc)}
-                      onResolve={() => { setResolveTarget(esc); setResolveNote(''); }}
-                      onAddNote={() => { setNoteTarget(esc); setNoteText(''); }}
+                      alertCount={countByAthlete(esc.athlete_id, tab)}
                       onViewDetails={() => openDrawer(esc)}
-                      onSchedulePhysio={() => { setPhysioTarget(esc); setPhysioDate(undefined); setPhysioTime('09:00'); setPhysioNote(''); }}
                     />
                   ))}
                 </div>
@@ -469,6 +479,26 @@ export default function CoachEscalations() {
               </SheetHeader>
 
               <div className="mt-6 space-y-6">
+                {/* Actions bar */}
+                {selected.status !== 'resolved' && (
+                  <section className="flex flex-wrap gap-2">
+                    {selected.status === 'open' && (
+                      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => { handleAcknowledge(selected); setDrawerOpen(false); }}>
+                        <Eye className="h-3.5 w-3.5" /> Acknowledge
+                      </Button>
+                    )}
+                    <Button size="sm" variant="default" className="gap-1.5" onClick={() => { setResolveTarget(selected); setResolveNote(''); setDrawerOpen(false); }}>
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Resolve
+                    </Button>
+                    <Button size="sm" variant="ghost" className="gap-1.5 text-muted-foreground" onClick={() => { setNoteTarget(selected); setNoteText(''); setDrawerOpen(false); }}>
+                      <StickyNote className="h-3.5 w-3.5" /> Add Note
+                    </Button>
+                    <Button size="sm" variant="outline" className="gap-1.5 border-primary/30 text-primary hover:bg-primary/10" onClick={() => { setPhysioTarget(selected); setPhysioDate(undefined); setPhysioTime('09:00'); setPhysioNote(''); setDrawerOpen(false); }}>
+                      <Stethoscope className="h-3.5 w-3.5" /> Physio Review
+                    </Button>
+                  </section>
+                )}
+
                 {/* Risk breakdown */}
                 <section className="space-y-3">
                   <h3 className="font-heading text-sm font-bold uppercase tracking-wider text-muted-foreground">Risk Breakdown</h3>
@@ -553,7 +583,7 @@ export default function CoachEscalations() {
                 <section className="space-y-2">
                   <h3 className="font-heading text-sm font-bold uppercase tracking-wider text-muted-foreground">Timeline</h3>
                   <div className="space-y-2 text-sm">
-                    <TimelineEntry icon={<AlertTriangle className="h-3.5 w-3.5 text-destructive" />} label="Created" time={selected.created_at} />
+                    <TimelineEntry icon={<AlertTriangle className="h-3.5 w-3.5 text-muted-foreground" />} label="Created" time={selected.created_at} />
                     {selected.acknowledged_at && <TimelineEntry icon={<Eye className="h-3.5 w-3.5 text-warning" />} label="Acknowledged" time={selected.acknowledged_at} />}
                     {selected.resolved_at && <TimelineEntry icon={<CheckCircle2 className="h-3.5 w-3.5 text-primary" />} label="Resolved" time={selected.resolved_at} />}
                   </div>
@@ -569,78 +599,59 @@ export default function CoachEscalations() {
 
 // ── Sub-components ──────────────────────────────────────────────────────────
 
-function EscalationItem({ esc, index, onAcknowledge, onResolve, onAddNote, onViewDetails, onSchedulePhysio }: {
+function EscalationItem({ esc, index, alertCount, onViewDetails }: {
   esc: EnrichedEscalation;
   index: number;
-  onAcknowledge: () => void;
-  onResolve: () => void;
-  onAddNote: () => void;
+  alertCount: number;
   onViewDetails: () => void;
-  onSchedulePhysio: () => void;
 }) {
-  const borderClass =
-    esc.status === 'open' ? 'border-destructive/30' :
-    esc.status === 'acknowledged' ? 'border-warning/30' :
-    'border-primary/30';
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05 }}
-      className={`glass-card p-4 space-y-3 border ${borderClass}`}
+      className="rounded-xl border border-border bg-card p-4 space-y-2.5 hover:border-muted-foreground/20 transition-colors cursor-pointer"
+      onClick={onViewDetails}
     >
-      {/* Row 1: athlete + risk badge + time */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-3">
-          <span className="font-heading font-bold text-foreground">{esc.athlete_name}</span>
+      {/* Row 1: athlete name + risk badge + score + time */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="font-heading font-bold text-foreground truncate">{esc.athlete_name}</span>
+          {alertCount > 1 && (
+            <Badge variant="secondary" className="text-[10px] h-5 px-1.5">{alertCount} alerts</Badge>
+          )}
           <RiskBadge level={esc.risk_level} />
-          <span className="font-heading font-bold text-lg" style={{ color: riskColor(esc.risk_score) }}>
+          <span className="font-heading font-bold tabular-nums" style={{ color: riskColor(esc.risk_score) }}>
             {esc.risk_score}
           </span>
         </div>
-        <span className="text-xs text-muted-foreground flex items-center gap-1">
+        <span className="text-xs text-muted-foreground flex items-center gap-1 shrink-0">
           <Clock className="h-3 w-3" />
           {formatDistanceToNow(new Date(esc.created_at), { addSuffix: true })}
         </span>
       </div>
 
-      {/* Row 2: metrics */}
-      <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
-        <span>Phase: <strong className="text-foreground capitalize">{esc.phase}</strong></span>
-        <span>ACR: <strong className="text-foreground">{esc.acr.toFixed(2)}</strong></span>
-        <span>Soreness: <strong className="text-foreground">{esc.soreness}</strong></span>
-        {esc.top_drivers[0] && (
-          <span>Top Driver: <strong className="text-foreground">{esc.top_drivers[0].feature} ({Math.round(esc.top_drivers[0].contribution * 100)}%)</strong></span>
-        )}
+      {/* Row 2: compact metadata */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <span className="capitalize">{esc.phase}</span>
+        <span>ACR {esc.acr.toFixed(2)}</span>
+        <span>Soreness {esc.soreness}</span>
       </div>
 
-      {/* Row 3: trigger reason */}
-      <p className="text-sm text-muted-foreground">{esc.trigger_reason}</p>
+      {/* Row 3: primary driver */}
+      {esc.top_drivers[0] && (
+        <p className="text-sm text-foreground">
+          <TrendingUp className="h-3.5 w-3.5 inline mr-1.5 text-muted-foreground" />
+          {esc.top_drivers[0].feature}
+          <span className="text-muted-foreground ml-1.5">({Math.round(esc.top_drivers[0].contribution * 100)}%)</span>
+        </p>
+      )}
 
-      {/* Row 4: actions */}
-      <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="outline" className="gap-1.5" onClick={onViewDetails}>
-          <ExternalLink className="h-3.5 w-3.5" /> Details
+      {/* Row 4: single action */}
+      <div className="flex justify-end pt-1">
+        <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={(e) => { e.stopPropagation(); onViewDetails(); }}>
+          <Eye className="h-3.5 w-3.5" /> View Details
         </Button>
-        {esc.status === 'open' && (
-          <Button size="sm" variant="outline" className="gap-1.5" onClick={onAcknowledge}>
-            <Eye className="h-3.5 w-3.5" /> Acknowledge
-          </Button>
-        )}
-        {esc.status !== 'resolved' && (
-          <Button size="sm" variant="default" className="gap-1.5" onClick={onResolve}>
-            <CheckCircle2 className="h-3.5 w-3.5" /> Resolve
-          </Button>
-        )}
-        <Button size="sm" variant="ghost" className="gap-1.5 text-muted-foreground" onClick={onAddNote}>
-          <StickyNote className="h-3.5 w-3.5" /> Note
-        </Button>
-        {esc.status !== 'resolved' && (
-          <Button size="sm" variant="outline" className="gap-1.5 border-primary/30 text-primary hover:bg-primary/10" onClick={onSchedulePhysio}>
-            <Stethoscope className="h-3.5 w-3.5" /> Physio Review
-          </Button>
-        )}
       </div>
     </motion.div>
   );
