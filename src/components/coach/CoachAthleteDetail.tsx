@@ -1,17 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import TopDrivers from '@/components/TopDrivers';
 import FeedbackButtons from '@/components/FeedbackButtons';
 import RiskBadge from '@/components/RiskBadge';
-import { ArrowLeft, Lock, Unlock, RotateCcw, CheckCircle2, Edit3, X, User } from 'lucide-react';
+import { ArrowLeft, Lock, Unlock, RotateCcw, CheckCircle2, Edit3, X, User, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Props {
@@ -49,11 +47,51 @@ export default function CoachAthleteDetail({ athleteId, athleteName, onBack }: P
   const [editValues, setEditValues] = useState<Partial<PlanSession>>({});
   const [report, setReport] = useState<any>(null);
   const [extraSessions, setExtraSessions] = useState<ExtraSession[]>([]);
+  const [riskPredictionId, setRiskPredictionId] = useState<string | null>(null);
+  const [rerunPending, setRerunPending] = useState(false);
+
+  // Debounced agent re-trigger: waits 8s after last override before firing
+  const rerunTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const triggerDebouncedRerun = useCallback(() => {
+    if (rerunTimerRef.current) clearTimeout(rerunTimerRef.current);
+    setRerunPending(true);
+    rerunTimerRef.current = setTimeout(async () => {
+      try {
+        await supabase.functions.invoke('agent-runner', {
+          body: { trigger_type: 'coach_override', coach_id: user?.id, athlete_id: athleteId },
+        });
+        toast.info('Re-analysis triggered for updated plan');
+      } catch {
+        toast.error('Failed to trigger re-analysis');
+      } finally {
+        setRerunPending(false);
+      }
+    }, 8000);
+  }, [user?.id, athleteId]);
+
+  // Cleanup timer on unmount
+  useEffect(() => () => { if (rerunTimerRef.current) clearTimeout(rerunTimerRef.current); }, []);
+
+  // Log feedback event alongside override
+  const logFeedback = async (feedbackType: string, reason?: string) => {
+    if (!user || !plan) return;
+    await supabase.from('feedback_events').insert({
+      athlete_id: athleteId,
+      agent_run_id: plan.agent_run_id || null,
+      weekly_plan_id: plan.id,
+      risk_prediction_id: riskPredictionId,
+      feedback_type: feedbackType,
+      reason: reason || null,
+      given_by: user.id,
+    });
+  };
 
   const loadPlan = async () => {
-    const [planRes, reportRes] = await Promise.all([
+    const [planRes, reportRes, predRes] = await Promise.all([
       supabase.from('weekly_plans').select('*').eq('athlete_id', athleteId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('risk_reports').select('*').eq('athlete_id', athleteId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      supabase.from('risk_predictions').select('id').eq('athlete_id', athleteId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
     ]);
     if (planRes.data) {
       setPlan(planRes.data);
@@ -62,6 +100,7 @@ export default function CoachAthleteDetail({ athleteId, athleteName, onBack }: P
       setIsLocked(planRes.data.locked_by_coach || false);
     }
     if (reportRes.data) setReport(reportRes.data);
+    if (predRes.data) setRiskPredictionId(predRes.data.id);
 
     // Fetch athlete extra sessions
     const { data: extras } = await supabase
@@ -92,7 +131,10 @@ export default function CoachAthleteDetail({ athleteId, athleteName, onBack }: P
 
   const handleAcceptAI = async () => {
     if (!plan) return;
-    await logOverride('accept_ai');
+    await Promise.all([
+      logOverride('accept_ai'),
+      logFeedback('accepted'),
+    ]);
     toast.success('AI plan accepted');
   };
 
@@ -101,9 +143,13 @@ export default function CoachAthleteDetail({ athleteId, athleteName, onBack }: P
     const oldAdj = adjustedSessions;
     const { error } = await supabase.from('weekly_plans').update({ adjusted_plan: originalSessions as unknown as any }).eq('id', plan.id);
     if (error) { toast.error('Failed to revert'); return; }
-    await logOverride('revert_original', undefined, { adjusted_plan: oldAdj }, { adjusted_plan: originalSessions });
+    await Promise.all([
+      logOverride('revert_original', undefined, { adjusted_plan: oldAdj }, { adjusted_plan: originalSessions }),
+      logFeedback('rejected', 'Reverted to original plan'),
+    ]);
     setAdjustedSessions([...originalSessions]);
     toast.success('Reverted to original plan');
+    triggerDebouncedRerun();
   };
 
   const handleLockToggle = async () => {
@@ -129,10 +175,14 @@ export default function CoachAthleteDetail({ athleteId, athleteName, onBack }: P
     newSessions[idx] = { ...newSessions[idx], ...editValues };
     const { error } = await supabase.from('weekly_plans').update({ adjusted_plan: newSessions as unknown as any }).eq('id', plan.id);
     if (error) { toast.error('Failed to save'); return; }
-    await logOverride('modify_session', day, oldSession, newSessions[idx]);
+    await Promise.all([
+      logOverride('modify_session', day, oldSession, newSessions[idx]),
+      logFeedback('modified', `Modified ${day}: ${JSON.stringify(editValues)}`),
+    ]);
     setAdjustedSessions(newSessions);
     setEditingDay(null);
     toast.success(`${day} session updated`);
+    triggerDebouncedRerun();
   };
 
   if (loading) return <div className="flex items-center justify-center h-32"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
@@ -189,6 +239,12 @@ export default function CoachAthleteDetail({ athleteId, athleteName, onBack }: P
               </div>
             </div>
             {isLocked && <p className="text-xs text-primary mt-1">🔒 Locked — Agent Runner will not modify this plan</p>}
+            {rerunPending && (
+              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
+                <RefreshCw className="h-3 w-3 animate-spin" />
+                Re-analysis queued — waiting for edits to settle…
+              </p>
+            )}
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

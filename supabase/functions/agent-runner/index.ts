@@ -218,10 +218,12 @@ Deno.serve(async (req: Request) => {
   // Determine trigger type and coach_id
   let triggerType = "manual";
   let coachId: string | null = null;
+  let singleAthleteId: string | null = null;
   try {
     const body = await req.json();
     if (body?.trigger_type) triggerType = body.trigger_type;
     if (body?.coach_id) coachId = body.coach_id;
+    if (body?.athlete_id) singleAthleteId = body.athlete_id;
   } catch { /* no body is fine */ }
 
   // If no coach_id in body, try to get it from the auth header
@@ -273,7 +275,9 @@ Deno.serve(async (req: Request) => {
 
   // Fetch athletes — scoped to coach if coach_id is available
   let athleteQuery = supabase.from("athlete_profiles").select("*");
-  if (coachId) {
+  if (singleAthleteId) {
+    athleteQuery = athleteQuery.eq("user_id", singleAthleteId);
+  } else if (coachId) {
     athleteQuery = athleteQuery.eq("coach_id", coachId);
   }
   const { data: athletes } = await athleteQuery;
