@@ -5,6 +5,8 @@ import AppLayout from '@/components/AppLayout';
 import RiskBadge from '@/components/RiskBadge';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -13,13 +15,19 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  Popover, PopoverContent, PopoverTrigger,
+} from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { formatDistanceToNow, format } from 'date-fns';
+import { cn } from '@/lib/utils';
 import {
   AlertTriangle, CheckCircle2, Eye, StickyNote, ExternalLink,
   Clock, Activity, Zap, TrendingUp, ShieldAlert, Loader2,
+  CalendarIcon, Stethoscope,
 } from 'lucide-react';
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -87,6 +95,13 @@ export default function CoachEscalations() {
   const [noteTarget, setNoteTarget] = useState<EnrichedEscalation | null>(null);
   const [noteText, setNoteText] = useState('');
   const [savingNote, setSavingNote] = useState(false);
+
+  // Physio review dialog
+  const [physioTarget, setPhysioTarget] = useState<EnrichedEscalation | null>(null);
+  const [physioDate, setPhysioDate] = useState<Date | undefined>(undefined);
+  const [physioTime, setPhysioTime] = useState('09:00');
+  const [physioNote, setPhysioNote] = useState('');
+  const [schedulingPhysio, setSchedulingPhysio] = useState(false);
 
   // ── Load escalations ────────────────────────────────────────────────────
 
@@ -223,6 +238,40 @@ export default function CoachEscalations() {
     loadData();
   };
 
+  // ── Schedule Physio Review ──────────────────────────────────────────────
+
+  const handleSchedulePhysio = async () => {
+    if (!user || !physioTarget || !physioDate) return;
+    setSchedulingPhysio(true);
+
+    const [hours, minutes] = physioTime.split(':').map(Number);
+    const followUpAt = new Date(physioDate);
+    followUpAt.setHours(hours, minutes, 0, 0);
+
+    const timestamp = format(new Date(), 'yyyy-MM-dd HH:mm');
+    const noteEntry = `[${timestamp}] Physio review scheduled for ${format(followUpAt, 'MMM d, yyyy HH:mm')}${physioNote.trim() ? ': ' + physioNote.trim() : ''}`;
+
+    const { error } = await supabase
+      .from('escalations')
+      .update({
+        status: 'acknowledged',
+        acknowledged_by: user.id,
+        acknowledged_at: new Date().toISOString(),
+        follow_up_at: followUpAt.toISOString(),
+        notes: physioTarget.notes ? `${physioTarget.notes}\n${noteEntry}` : noteEntry,
+      } as any)
+      .eq('id', physioTarget.id);
+
+    setSchedulingPhysio(false);
+    if (error) { toast.error('Failed to schedule'); return; }
+    toast.success(`Physio review scheduled for ${format(followUpAt, 'MMM d, HH:mm')}`);
+    setPhysioTarget(null);
+    setPhysioDate(undefined);
+    setPhysioTime('09:00');
+    setPhysioNote('');
+    loadData();
+  };
+
   // ── Detail drawer ─────────────────────────────────────────────────────
 
   const openDrawer = async (esc: EnrichedEscalation) => {
@@ -295,6 +344,7 @@ export default function CoachEscalations() {
                       onResolve={() => { setResolveTarget(esc); setResolveNote(''); }}
                       onAddNote={() => { setNoteTarget(esc); setNoteText(''); }}
                       onViewDetails={() => openDrawer(esc)}
+                      onSchedulePhysio={() => { setPhysioTarget(esc); setPhysioDate(undefined); setPhysioTime('09:00'); setPhysioNote(''); }}
                     />
                   ))}
                 </div>
@@ -350,7 +400,62 @@ export default function CoachEscalations() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Detail Drawer ──────────────────────────────────────────────── */}
+      {/* ── Schedule Physio Dialog ──────────────────────────────────────── */}
+      <Dialog open={!!physioTarget} onOpenChange={open => { if (!open) setPhysioTarget(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading uppercase tracking-wider flex items-center gap-2">
+              <Stethoscope className="h-5 w-5 text-primary" />
+              Schedule Physio Review
+            </DialogTitle>
+            <DialogDescription>Schedule a physio review for {physioTarget?.athlete_name}.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !physioDate && "text-muted-foreground")}>
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {physioDate ? format(physioDate, 'PPP') : 'Pick a date'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={physioDate}
+                    onSelect={setPhysioDate}
+                    disabled={(date) => date < new Date()}
+                    initialFocus
+                    className={cn("p-3 pointer-events-auto")}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="space-y-2">
+              <Label>Time</Label>
+              <Input type="time" value={physioTime} onChange={e => setPhysioTime(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Notes (optional)</Label>
+              <Textarea
+                placeholder="e.g. Focus on knee assessment, check hamstring flexibility..."
+                value={physioNote}
+                onChange={e => setPhysioNote(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPhysioTarget(null)}>Cancel</Button>
+            <Button onClick={handleSchedulePhysio} disabled={schedulingPhysio || !physioDate} className="gap-2">
+              {schedulingPhysio && <Loader2 className="h-4 w-4 animate-spin" />}
+              <Stethoscope className="h-4 w-4" /> Schedule
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
         <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
           {selected && (
@@ -464,13 +569,14 @@ export default function CoachEscalations() {
 
 // ── Sub-components ──────────────────────────────────────────────────────────
 
-function EscalationItem({ esc, index, onAcknowledge, onResolve, onAddNote, onViewDetails }: {
+function EscalationItem({ esc, index, onAcknowledge, onResolve, onAddNote, onViewDetails, onSchedulePhysio }: {
   esc: EnrichedEscalation;
   index: number;
   onAcknowledge: () => void;
   onResolve: () => void;
   onAddNote: () => void;
   onViewDetails: () => void;
+  onSchedulePhysio: () => void;
 }) {
   const borderClass =
     esc.status === 'open' ? 'border-destructive/30' :
@@ -530,6 +636,11 @@ function EscalationItem({ esc, index, onAcknowledge, onResolve, onAddNote, onVie
         <Button size="sm" variant="ghost" className="gap-1.5 text-muted-foreground" onClick={onAddNote}>
           <StickyNote className="h-3.5 w-3.5" /> Note
         </Button>
+        {esc.status !== 'resolved' && (
+          <Button size="sm" variant="outline" className="gap-1.5 border-primary/30 text-primary hover:bg-primary/10" onClick={onSchedulePhysio}>
+            <Stethoscope className="h-3.5 w-3.5" /> Physio Review
+          </Button>
+        )}
       </div>
     </motion.div>
   );

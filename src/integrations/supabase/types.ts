@@ -175,6 +175,7 @@ export type Database = {
           agent_run_id: string | null
           athlete_id: string
           created_at: string
+          follow_up_at: string | null
           id: string
           notes: string | null
           resolved_at: string | null
@@ -189,6 +190,7 @@ export type Database = {
           agent_run_id?: string | null
           athlete_id: string
           created_at?: string
+          follow_up_at?: string | null
           id?: string
           notes?: string | null
           resolved_at?: string | null
@@ -203,6 +205,7 @@ export type Database = {
           agent_run_id?: string | null
           athlete_id?: string
           created_at?: string
+          follow_up_at?: string | null
           id?: string
           notes?: string | null
           resolved_at?: string | null
