@@ -5,7 +5,7 @@ import AppLayout from '@/components/AppLayout';
 import AgentStatus from '@/components/AgentStatus';
 import EscalationCard from '@/components/EscalationCard';
 import SquadRiskSnapshot from '@/components/coach/SquadRiskSnapshot';
-import CoachQuickActions from '@/components/coach/CoachQuickActions';
+
 import AthleteTable, { type AthleteRow } from '@/components/coach/AthleteTable';
 import SquadRiskTrendChart from '@/components/coach/SquadRiskTrendChart';
 import CoachAthleteDetail from '@/components/coach/CoachAthleteDetail';
@@ -180,11 +180,6 @@ export default function CoachDashboard() {
         {/* Agent Status */}
         <AgentStatus />
 
-        {/* Coach Quick Actions */}
-        <CoachQuickActions
-          onViewAnalytics={() => {}}
-          onReviewEscalations={() => escalationRef.current?.scrollIntoView({ behavior: 'smooth' })}
-        />
 
         {/* 1. Squad Risk Snapshot */}
         <SquadRiskSnapshot
