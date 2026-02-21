@@ -14,7 +14,225 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      athlete_profiles: {
+        Row: {
+          coach_id: string | null
+          contraceptive_use: boolean | null
+          created_at: string
+          cycle_length: number | null
+          cycle_start_date: string | null
+          id: string
+          menstruation_length: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          coach_id?: string | null
+          contraceptive_use?: boolean | null
+          created_at?: string
+          cycle_length?: number | null
+          cycle_start_date?: string | null
+          id?: string
+          menstruation_length?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          coach_id?: string | null
+          contraceptive_use?: boolean | null
+          created_at?: string
+          cycle_length?: number | null
+          cycle_start_date?: string | null
+          id?: string
+          menstruation_length?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string | null
+          full_name: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      risk_reports: {
+        Row: {
+          acute_chronic_ratio: number | null
+          athlete_id: string
+          created_at: string
+          escalation_status: string | null
+          explanation: string | null
+          id: string
+          load_risk_multiplier: number | null
+          phase: string | null
+          phase_multiplier: number | null
+          risk_level: string
+          risk_score: number
+          soreness_contribution: number | null
+        }
+        Insert: {
+          acute_chronic_ratio?: number | null
+          athlete_id: string
+          created_at?: string
+          escalation_status?: string | null
+          explanation?: string | null
+          id?: string
+          load_risk_multiplier?: number | null
+          phase?: string | null
+          phase_multiplier?: number | null
+          risk_level?: string
+          risk_score?: number
+          soreness_contribution?: number | null
+        }
+        Update: {
+          acute_chronic_ratio?: number | null
+          athlete_id?: string
+          created_at?: string
+          escalation_status?: string | null
+          explanation?: string | null
+          id?: string
+          load_risk_multiplier?: number | null
+          phase?: string | null
+          phase_multiplier?: number | null
+          risk_level?: string
+          risk_score?: number
+          soreness_contribution?: number | null
+        }
+        Relationships: []
+      }
+      soreness_logs: {
+        Row: {
+          athlete_id: string
+          calf: number
+          created_at: string
+          date: string
+          groin: number
+          hamstring: number
+          id: string
+          knee: number
+          other_label: string | null
+          other_value: number | null
+        }
+        Insert: {
+          athlete_id: string
+          calf?: number
+          created_at?: string
+          date?: string
+          groin?: number
+          hamstring?: number
+          id?: string
+          knee?: number
+          other_label?: string | null
+          other_value?: number | null
+        }
+        Update: {
+          athlete_id?: string
+          calf?: number
+          created_at?: string
+          date?: string
+          groin?: number
+          hamstring?: number
+          id?: string
+          knee?: number
+          other_label?: string | null
+          other_value?: number | null
+        }
+        Relationships: []
+      }
+      training_sessions: {
+        Row: {
+          athlete_id: string
+          created_at: string
+          date: string
+          duration: number
+          id: string
+          intensity: string
+          rpe: number
+          session_type: string
+          sport: string
+        }
+        Insert: {
+          athlete_id: string
+          created_at?: string
+          date?: string
+          duration?: number
+          id?: string
+          intensity?: string
+          rpe?: number
+          session_type?: string
+          sport?: string
+        }
+        Update: {
+          athlete_id?: string
+          created_at?: string
+          date?: string
+          duration?: number
+          id?: string
+          intensity?: string
+          rpe?: number
+          session_type?: string
+          sport?: string
+        }
+        Relationships: []
+      }
+      weekly_plans: {
+        Row: {
+          adjusted_plan: Json
+          athlete_id: string
+          created_at: string
+          explanation: string | null
+          id: string
+          last_updated: string
+          original_plan: Json
+          risk_level: string | null
+          risk_score: number | null
+        }
+        Insert: {
+          adjusted_plan?: Json
+          athlete_id: string
+          created_at?: string
+          explanation?: string | null
+          id?: string
+          last_updated?: string
+          original_plan?: Json
+          risk_level?: string | null
+          risk_score?: number | null
+        }
+        Update: {
+          adjusted_plan?: Json
+          athlete_id?: string
+          created_at?: string
+          explanation?: string | null
+          id?: string
+          last_updated?: string
+          original_plan?: Json
+          risk_level?: string | null
+          risk_score?: number | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +241,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      app_role: "athlete" | "coach"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +368,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["athlete", "coach"],
+    },
   },
 } as const
