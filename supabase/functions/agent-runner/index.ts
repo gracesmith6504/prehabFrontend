@@ -242,17 +242,24 @@ Deno.serve(async (req: Request) => {
       // ===== 3. PLAN =====
       const { data: existingPlan } = await supabase
         .from("weekly_plans")
-        .select("id, original_plan")
+        .select("id, original_plan, locked_by_coach")
         .eq("athlete_id", uid)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
 
+      // Respect coach lock — skip plan adjustment if locked
+      const planLocked = existingPlan?.locked_by_coach === true;
+
       const basePlan = existingPlan?.original_plan || defaultPlan();
-      const { adjusted, changes } = adjustPlan(basePlan as any[], risk.score);
+      const { adjusted, changes } = planLocked
+        ? { adjusted: existingPlan?.original_plan as any[] || defaultPlan(), changes: [] as string[] }
+        : adjustPlan(basePlan as any[], risk.score);
 
       // ===== 4. ACT =====
-      const explanation = buildExplanation(phase, risk.score, acr, sorenessC, changes);
+      const explanation = planLocked
+        ? buildExplanation(phase, risk.score, acr, sorenessC, []) + " (Plan locked by coach — no adjustments made.)"
+        : buildExplanation(phase, risk.score, acr, sorenessC, changes);
 
       // Write risk report
       await supabase.from("risk_reports").insert({
@@ -264,13 +271,13 @@ Deno.serve(async (req: Request) => {
         agent_run_id: runId, risk_prediction_id: prediction?.id,
       });
 
-      // Write/update weekly plan
-      if (existingPlan) {
+      // Write/update weekly plan (skip update if locked)
+      if (existingPlan && !planLocked) {
         await supabase.from("weekly_plans").update({
           adjusted_plan: adjusted, risk_score: risk.score,
           risk_level: risk.level, explanation, agent_run_id: runId,
         }).eq("id", existingPlan.id);
-      } else {
+      } else if (!existingPlan) {
         await supabase.from("weekly_plans").insert({
           athlete_id: uid, original_plan: basePlan,
           adjusted_plan: adjusted, risk_score: risk.score,

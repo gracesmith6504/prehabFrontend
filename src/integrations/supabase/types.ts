@@ -121,6 +121,53 @@ export type Database = {
         }
         Relationships: []
       }
+      coach_override_events: {
+        Row: {
+          athlete_id: string
+          coach_id: string
+          created_at: string
+          id: string
+          new_values: Json | null
+          old_values: Json | null
+          override_type: string
+          reason: string | null
+          session_day: string | null
+          weekly_plan_id: string | null
+        }
+        Insert: {
+          athlete_id: string
+          coach_id: string
+          created_at?: string
+          id?: string
+          new_values?: Json | null
+          old_values?: Json | null
+          override_type: string
+          reason?: string | null
+          session_day?: string | null
+          weekly_plan_id?: string | null
+        }
+        Update: {
+          athlete_id?: string
+          coach_id?: string
+          created_at?: string
+          id?: string
+          new_values?: Json | null
+          old_values?: Json | null
+          override_type?: string
+          reason?: string | null
+          session_day?: string | null
+          weekly_plan_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coach_override_events_weekly_plan_id_fkey"
+            columns: ["weekly_plan_id"]
+            isOneToOne: false
+            referencedRelation: "weekly_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       escalations: {
         Row: {
           acknowledged_at: string | null
@@ -502,6 +549,9 @@ export type Database = {
           explanation: string | null
           id: string
           last_updated: string
+          locked_at: string | null
+          locked_by: string | null
+          locked_by_coach: boolean | null
           original_plan: Json
           risk_level: string | null
           risk_score: number | null
@@ -514,6 +564,9 @@ export type Database = {
           explanation?: string | null
           id?: string
           last_updated?: string
+          locked_at?: string | null
+          locked_by?: string | null
+          locked_by_coach?: boolean | null
           original_plan?: Json
           risk_level?: string | null
           risk_score?: number | null
@@ -526,6 +579,9 @@ export type Database = {
           explanation?: string | null
           id?: string
           last_updated?: string
+          locked_at?: string | null
+          locked_by?: string | null
+          locked_by_coach?: boolean | null
           original_plan?: Json
           risk_level?: string | null
           risk_score?: number | null

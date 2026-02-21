@@ -1,0 +1,251 @@
+import { useEffect, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import TopDrivers from '@/components/TopDrivers';
+import FeedbackButtons from '@/components/FeedbackButtons';
+import RiskBadge from '@/components/RiskBadge';
+import { ArrowLeft, Lock, Unlock, RotateCcw, CheckCircle2, Edit3, X } from 'lucide-react';
+import { toast } from 'sonner';
+
+interface Props {
+  athleteId: string;
+  athleteName: string;
+  onBack: () => void;
+}
+
+interface PlanSession {
+  day: string;
+  type: string;
+  intensity: string;
+  duration: number;
+  notes?: string;
+}
+
+export default function CoachAthleteDetail({ athleteId, athleteName, onBack }: Props) {
+  const { user } = useAuth();
+  const [plan, setPlan] = useState<any>(null);
+  const [originalSessions, setOriginalSessions] = useState<PlanSession[]>([]);
+  const [adjustedSessions, setAdjustedSessions] = useState<PlanSession[]>([]);
+  const [isLocked, setIsLocked] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [editingDay, setEditingDay] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState<Partial<PlanSession>>({});
+  const [report, setReport] = useState<any>(null);
+
+  const loadPlan = async () => {
+    const [planRes, reportRes] = await Promise.all([
+      supabase.from('weekly_plans').select('*').eq('athlete_id', athleteId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      supabase.from('risk_reports').select('*').eq('athlete_id', athleteId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    ]);
+    if (planRes.data) {
+      setPlan(planRes.data);
+      setOriginalSessions(planRes.data.original_plan as unknown as PlanSession[]);
+      setAdjustedSessions(planRes.data.adjusted_plan as unknown as PlanSession[]);
+      setIsLocked(planRes.data.locked_by_coach || false);
+    }
+    if (reportRes.data) setReport(reportRes.data);
+    setLoading(false);
+  };
+
+  useEffect(() => { loadPlan(); }, [athleteId]);
+
+  const logOverride = async (overrideType: string, sessionDay?: string, oldVals?: any, newVals?: any, reason?: string) => {
+    if (!user || !plan) return;
+    await supabase.from('coach_override_events').insert({
+      coach_id: user.id,
+      athlete_id: athleteId,
+      weekly_plan_id: plan.id,
+      override_type: overrideType,
+      session_day: sessionDay || null,
+      old_values: oldVals || {},
+      new_values: newVals || {},
+      reason: reason || null,
+    });
+  };
+
+  const handleAcceptAI = async () => {
+    if (!plan) return;
+    await logOverride('accept_ai');
+    toast.success('AI plan accepted');
+  };
+
+  const handleRevert = async () => {
+    if (!plan) return;
+    const oldAdj = adjustedSessions;
+    const { error } = await supabase.from('weekly_plans').update({ adjusted_plan: originalSessions as unknown as any }).eq('id', plan.id);
+    if (error) { toast.error('Failed to revert'); return; }
+    await logOverride('revert_original', undefined, { adjusted_plan: oldAdj }, { adjusted_plan: originalSessions });
+    setAdjustedSessions([...originalSessions]);
+    toast.success('Reverted to original plan');
+  };
+
+  const handleLockToggle = async () => {
+    if (!plan || !user) return;
+    const newLocked = !isLocked;
+    const { error } = await supabase.from('weekly_plans').update({
+      locked_by_coach: newLocked,
+      locked_at: newLocked ? new Date().toISOString() : null,
+      locked_by: newLocked ? user.id : null,
+    }).eq('id', plan.id);
+    if (error) { toast.error('Failed to update lock'); return; }
+    await logOverride('lock_week', undefined, { locked: isLocked }, { locked: newLocked });
+    setIsLocked(newLocked);
+    toast.success(newLocked ? 'Week locked — agent will skip this plan' : 'Week unlocked');
+  };
+
+  const handleSaveSession = async (day: string) => {
+    if (!plan) return;
+    const idx = adjustedSessions.findIndex(s => s.day === day);
+    if (idx === -1) return;
+    const oldSession = { ...adjustedSessions[idx] };
+    const newSessions = [...adjustedSessions];
+    newSessions[idx] = { ...newSessions[idx], ...editValues };
+    const { error } = await supabase.from('weekly_plans').update({ adjusted_plan: newSessions as unknown as any }).eq('id', plan.id);
+    if (error) { toast.error('Failed to save'); return; }
+    await logOverride('modify_session', day, oldSession, newSessions[idx]);
+    setAdjustedSessions(newSessions);
+    setEditingDay(null);
+    toast.success(`${day} session updated`);
+  };
+
+  if (loading) return <div className="flex items-center justify-center h-32"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="h-5 w-5" /></Button>
+        <div>
+          <h2 className="text-2xl font-heading font-bold">{athleteName}</h2>
+          {report && <div className="flex items-center gap-2 mt-1"><RiskBadge level={report.risk_level} /><span className="text-sm text-muted-foreground">Score: {report.risk_score}</span></div>}
+        </div>
+      </div>
+
+      {/* Risk Summary */}
+      {report && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="glass-card p-4 text-center">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">Phase</p>
+            <p className="font-heading font-bold capitalize text-lg">{report.phase || 'Unknown'}</p>
+          </div>
+          <div className="glass-card p-4 text-center">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">ACR</p>
+            <p className={`font-heading font-bold text-lg ${report.acute_chronic_ratio > 1.5 ? 'text-destructive' : ''}`}>{report.acute_chronic_ratio?.toFixed(2) ?? '—'}</p>
+          </div>
+          <div className="glass-card p-4 text-center">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">Soreness</p>
+            <p className="font-heading font-bold text-lg">{report.soreness_contribution?.toFixed(0) ?? '—'}</p>
+          </div>
+          <div className="glass-card p-4 text-center">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">Risk Score</p>
+            <p className={`font-heading font-bold text-lg ${report.risk_score >= 75 ? 'text-destructive' : report.risk_score >= 50 ? 'risk-medium' : 'text-primary'}`}>{report.risk_score}</p>
+          </div>
+        </div>
+      )}
+
+      <TopDrivers athleteId={athleteId} />
+
+      {/* Plan Control */}
+      {plan && (
+        <Card className="border-border">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <CardTitle className="text-lg font-heading flex items-center gap-2">
+                {isLocked ? <Lock className="h-5 w-5 text-primary" /> : <Unlock className="h-5 w-5 text-muted-foreground" />}
+                Weekly Plan Control
+              </CardTitle>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={handleAcceptAI}><CheckCircle2 className="h-3.5 w-3.5" /> Accept AI</Button>
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={handleRevert}><RotateCcw className="h-3.5 w-3.5" /> Revert</Button>
+                <Button size="sm" variant={isLocked ? 'default' : 'outline'} className="gap-1.5" onClick={handleLockToggle}>
+                  {isLocked ? <><Lock className="h-3.5 w-3.5" /> Locked</> : <><Unlock className="h-3.5 w-3.5" /> Lock Week</>}
+                </Button>
+              </div>
+            </div>
+            {isLocked && <p className="text-xs text-primary mt-1">🔒 Locked — Agent Runner will not modify this plan</p>}
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Original */}
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">Original Plan</p>
+                <div className="space-y-1.5">
+                  {originalSessions.map(s => (
+                    <div key={s.day} className="flex justify-between items-center bg-secondary/30 rounded-lg px-3 py-2 text-sm">
+                      <span className="font-medium w-20">{s.day}</span>
+                      <span>{s.type}</span>
+                      <span className={s.intensity === 'High' ? 'text-destructive' : s.intensity === 'Medium' ? 'risk-medium' : 'text-primary'}>{s.intensity}</span>
+                      <span className="text-muted-foreground">{s.duration}m</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* AI-Adjusted */}
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">AI-Adjusted Plan</p>
+                <div className="space-y-1.5">
+                  {adjustedSessions.map(s => {
+                    const orig = originalSessions.find(o => o.day === s.day);
+                    const changed = orig && (orig.type !== s.type || orig.intensity !== s.intensity || orig.duration !== s.duration);
+                    return (
+                      <div key={s.day} className={`flex justify-between items-center rounded-lg px-3 py-2 text-sm ${changed ? 'bg-primary/10 border border-primary/20' : 'bg-secondary/30'}`}>
+                        {editingDay === s.day ? (
+                          <>
+                            <span className="font-medium w-16">{s.day}</span>
+                            <Select value={editValues.type || s.type} onValueChange={v => setEditValues(p => ({ ...p, type: v }))}>
+                              <SelectTrigger className="w-24 h-7 text-xs"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                {['Strength', 'Sprint', 'Recovery', 'Plyometrics', 'Match', 'Rest'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                            <Select value={editValues.intensity || s.intensity} onValueChange={v => setEditValues(p => ({ ...p, intensity: v }))}>
+                              <SelectTrigger className="w-20 h-7 text-xs"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                {['Low', 'Medium', 'High'].map(i => <SelectItem key={i} value={i}>{i}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                            <Input type="number" className="w-14 h-7 text-xs" value={editValues.duration ?? s.duration} onChange={e => setEditValues(p => ({ ...p, duration: Number(e.target.value) }))} />
+                            <div className="flex gap-1">
+                              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleSaveSession(s.day)}><CheckCircle2 className="h-3 w-3 text-primary" /></Button>
+                              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setEditingDay(null)}><X className="h-3 w-3" /></Button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <span className="font-medium w-20">{s.day}</span>
+                            <span>{s.type}</span>
+                            <span className={s.intensity === 'High' ? 'text-destructive' : s.intensity === 'Medium' ? 'risk-medium' : 'text-primary'}>{s.intensity}</span>
+                            <span className="text-muted-foreground">{s.duration}m</span>
+                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => { setEditingDay(s.day); setEditValues({ type: s.type, intensity: s.intensity, duration: s.duration }); }}>
+                              <Edit3 className="h-3 w-3" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {plan.explanation && <p className="text-sm text-muted-foreground mt-4 bg-secondary/30 rounded-lg p-3">{plan.explanation}</p>}
+
+            <div className="mt-4">
+              <FeedbackButtons
+                athleteId={athleteId}
+                weeklyPlanId={plan.id}
+                agentRunId={plan.agent_run_id}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
