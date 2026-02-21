@@ -3,14 +3,22 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import AppLayout from '@/components/AppLayout';
 import RiskBadge from '@/components/RiskBadge';
+import FeedbackButtons from '@/components/FeedbackButtons';
 import {
   generateDefaultPlan, adjustPlan, generateExplanation,
   getCurrentPhase, calculateAcuteChronicRatio, calculateSorenessContribution,
   calculateRiskScore, type PlanSession, type MenstrualPhase,
 } from '@/lib/riskEngine';
-import { ClipboardList, ArrowRight, Calendar, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { ClipboardList, ArrowRight, Calendar, Bot, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { formatDistanceToNow } from 'date-fns';
+
+interface AgentRunMeta {
+  started_at: string;
+  model_version: string | null;
+  trigger_type: string;
+}
 
 export default function PlanView() {
   const { user } = useAuth();
@@ -21,6 +29,11 @@ export default function PlanView() {
   const [riskLevel, setRiskLevel] = useState('Low');
   const [explanation, setExplanation] = useState('');
   const [loading, setLoading] = useState(true);
+  const [weeklyPlanId, setWeeklyPlanId] = useState<string | null>(null);
+  const [agentRun, setAgentRun] = useState<AgentRunMeta | null>(null);
+  const [riskProb, setRiskProb] = useState<number | null>(null);
+  const [agentRunId, setAgentRunId] = useState<string | null>(null);
+  const [riskPredictionId, setRiskPredictionId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -43,8 +56,26 @@ export default function PlanView() {
       setRiskScore(risk.score);
       setRiskLevel(risk.level);
 
-      // Check if there's a saved plan, otherwise use default
+      // Fetch saved plan
       const { data: savedPlan } = await supabase.from('weekly_plans').select('*').eq('athlete_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+
+      if (savedPlan) {
+        setWeeklyPlanId(savedPlan.id);
+        setAgentRunId(savedPlan.agent_run_id);
+
+        // Fetch agent run metadata if linked
+        if (savedPlan.agent_run_id) {
+          const { data: run } = await supabase.from('agent_runs').select('started_at, model_version, trigger_type').eq('id', savedPlan.agent_run_id).maybeSingle();
+          if (run) setAgentRun(run);
+        }
+      }
+
+      // Fetch latest risk prediction for probability
+      const { data: pred } = await supabase.from('risk_predictions').select('id, risk_prob').eq('athlete_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (pred) {
+        setRiskProb(Number(pred.risk_prob));
+        setRiskPredictionId(pred.id);
+      }
 
       const basePlan = savedPlan?.original_plan
         ? (savedPlan.original_plan as unknown as PlanSession[])
@@ -56,23 +87,17 @@ export default function PlanView() {
       setChanges(result.changes);
       setExplanation(generateExplanation(phase, risk.score, ratio, sorenessContrib, result.changes));
 
-      // Save plan
-      if (savedPlan) {
-        await supabase.from('weekly_plans').update({
-          adjusted_plan: result.adjusted as any,
-          risk_score: risk.score,
-          risk_level: risk.level,
-          explanation: generateExplanation(phase, risk.score, ratio, sorenessContrib, result.changes),
-        }).eq('id', savedPlan.id);
-      } else {
-        await supabase.from('weekly_plans').insert({
+      // Save plan if no saved plan exists
+      if (!savedPlan) {
+        const { data: newPlan } = await supabase.from('weekly_plans').insert({
           athlete_id: user.id,
           original_plan: basePlan as any,
           adjusted_plan: result.adjusted as any,
           risk_score: risk.score,
           risk_level: risk.level,
           explanation: generateExplanation(phase, risk.score, ratio, sorenessContrib, result.changes),
-        });
+        }).select('id').maybeSingle();
+        if (newPlan) setWeeklyPlanId(newPlan.id);
       }
 
       setLoading(false);
@@ -81,8 +106,6 @@ export default function PlanView() {
     compute();
   }, [user]);
 
-  const isChanged = (day: string) => adjusted.find(s => s.day === day)?.notes;
-
   if (loading) {
     return <AppLayout><div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div></AppLayout>;
   }
@@ -90,7 +113,6 @@ export default function PlanView() {
   const today = new Date();
   const todayDay = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][today.getDay()];
 
-  // Build week dates starting from Monday
   const getWeekDates = () => {
     const now = new Date();
     const dayOfWeek = now.getDay();
@@ -124,6 +146,31 @@ export default function PlanView() {
           <RiskBadge level={riskLevel} />
         </div>
 
+        {/* Agent Run Info + Risk Probability */}
+        {(agentRun || riskProb !== null) && (
+          <div className="glass-card p-4 flex flex-wrap items-center gap-4 text-sm">
+            {agentRun && (
+              <>
+                <div className="flex items-center gap-2">
+                  <Bot className="h-4 w-4 text-primary" />
+                  <span className="text-muted-foreground">Generated by agent</span>
+                  <span className="font-medium">{formatDistanceToNow(new Date(agentRun.started_at))} ago</span>
+                </div>
+                {agentRun.model_version && (
+                  <span className="text-xs bg-secondary px-2 py-0.5 rounded-full font-mono">{agentRun.model_version}</span>
+                )}
+                <span className="text-xs text-muted-foreground capitalize">{agentRun.trigger_type} trigger</span>
+              </>
+            )}
+            {riskProb !== null && (
+              <div className="flex items-center gap-2 ml-auto">
+                <span className="text-muted-foreground">Risk Prob:</span>
+                <span className="font-bold">{(riskProb * 100).toFixed(1)}%</span>
+              </div>
+            )}
+          </div>
+        )}
+
         {changes.length > 0 && (
           <div className="glass-card p-4 border-primary/30">
             <p className="text-xs text-primary font-bold uppercase tracking-wider mb-2">AI Adjustments Made</p>
@@ -141,7 +188,6 @@ export default function PlanView() {
             <TabsTrigger value="comparison" className="gap-2"><ArrowRight className="h-4 w-4" /> Comparison View</TabsTrigger>
           </TabsList>
 
-          {/* Calendar View */}
           <TabsContent value="calendar" className="mt-4">
             <div className="grid grid-cols-7 gap-2">
               {weekDates.map(({ day, date }) => {
@@ -187,7 +233,6 @@ export default function PlanView() {
             </div>
           </TabsContent>
 
-          {/* Comparison View */}
           <TabsContent value="comparison" className="mt-4 space-y-3">
             <div className="grid grid-cols-[80px_1fr_40px_1fr] gap-2 text-xs text-muted-foreground uppercase tracking-wider px-4">
               <span>Day</span>
@@ -231,6 +276,16 @@ export default function PlanView() {
           <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">AI Explanation</p>
           <p className="text-sm leading-relaxed">{explanation}</p>
         </div>
+
+        {/* Feedback */}
+        {user && (
+          <FeedbackButtons
+            athleteId={user.id}
+            weeklyPlanId={weeklyPlanId || undefined}
+            riskPredictionId={riskPredictionId || undefined}
+            agentRunId={agentRunId || undefined}
+          />
+        )}
       </div>
     </AppLayout>
   );
