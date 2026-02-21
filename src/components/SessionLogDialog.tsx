@@ -8,10 +8,10 @@ import { Slider } from '@/components/ui/slider';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { PlanSession } from '@/lib/riskEngine';
-import { CheckCircle2, Clock, Gauge, StickyNote, HeartPulse } from 'lucide-react';
+import { CheckCircle2, Clock, Gauge, StickyNote, HeartPulse, Plus, X } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-const MUSCLE_GROUPS = ['knee', 'hamstring', 'groin', 'calf'] as const;
+const DEFAULT_MUSCLES = ['knee', 'hamstring', 'groin', 'calf'] as const;
 
 interface SessionLogDialogProps {
   open: boolean;
@@ -43,39 +43,101 @@ export default function SessionLogDialog({
   });
   const [existingSorenessId, setExistingSorenessId] = useState<string | null>(null);
 
+  // Custom body parts
+  const [customParts, setCustomParts] = useState<string[]>([]);
+  const [customSoreness, setCustomSoreness] = useState<Record<string, number>>({});
+  const [newPartLabel, setNewPartLabel] = useState('');
+  const [showAddPart, setShowAddPart] = useState(false);
+
   const dateStr = date.toISOString().split('T')[0];
   const isEditing = !!existingLog;
 
-  // Load existing soreness for this date
+  // Load existing soreness + custom parts for this athlete
   useEffect(() => {
     if (!open) return;
     const load = async () => {
+      // Load default soreness for this date
       const { data } = await supabase
         .from('soreness_logs')
-        .select('id, knee, hamstring, groin, calf')
+        .select('id, knee, hamstring, groin, calf, other_label, other_value')
         .eq('athlete_id', athleteId)
-        .eq('date', dateStr)
-        .limit(1)
-        .maybeSingle();
-      if (data) {
-        setSoreness({ knee: data.knee, hamstring: data.hamstring, groin: data.groin, calf: data.calf });
-        setExistingSorenessId(data.id);
+        .eq('date', dateStr);
+
+      if (data && data.length > 0) {
+        // First row has defaults
+        const base = data[0];
+        setSoreness({ knee: base.knee, hamstring: base.hamstring, groin: base.groin, calf: base.calf });
+        setExistingSorenessId(base.id);
+
+        // Gather custom parts from all rows with other_label
+        const customs: Record<string, { value: number }> = {};
+        data.forEach(row => {
+          if (row.other_label) {
+            customs[row.other_label] = { value: row.other_value || 0 };
+          }
+        });
+        const customLabels = Object.keys(customs);
+        setCustomParts(customLabels);
+        const customVals: Record<string, number> = {};
+        customLabels.forEach(l => { customVals[l] = customs[l].value; });
+        setCustomSoreness(customVals);
       } else {
         setSoreness({ knee: 0, hamstring: 0, groin: 0, calf: 0 });
         setExistingSorenessId(null);
+        // Still load known custom parts from past logs
+        const { data: pastCustom } = await supabase
+          .from('soreness_logs')
+          .select('other_label')
+          .eq('athlete_id', athleteId)
+          .not('other_label', 'is', null);
+        if (pastCustom) {
+          const unique = [...new Set(pastCustom.map(r => r.other_label).filter(Boolean))] as string[];
+          setCustomParts(unique);
+          const vals: Record<string, number> = {};
+          unique.forEach(l => { vals[l] = 0; });
+          setCustomSoreness(vals);
+        } else {
+          setCustomParts([]);
+          setCustomSoreness({});
+        }
       }
     };
     load();
   }, [open, athleteId, dateStr]);
 
-  // Reset form when dialog opens with new data
+  // Reset form when dialog opens
   useEffect(() => {
     if (open) {
       setDuration(existingLog?.duration ?? session.duration);
       setRpe(existingLog?.rpe ?? 5);
       setNotes(existingLog?.notes ?? '');
+      setShowAddPart(false);
+      setNewPartLabel('');
     }
   }, [open, existingLog, session]);
+
+  const addCustomPart = () => {
+    const label = newPartLabel.trim().toLowerCase();
+    if (!label) return;
+    const allParts = [...DEFAULT_MUSCLES as readonly string[], ...customParts];
+    if (allParts.includes(label)) {
+      toast({ title: 'Already exists', variant: 'destructive' });
+      return;
+    }
+    setCustomParts(prev => [...prev, label]);
+    setCustomSoreness(prev => ({ ...prev, [label]: 0 }));
+    setNewPartLabel('');
+    setShowAddPart(false);
+  };
+
+  const removeCustomPart = (part: string) => {
+    setCustomParts(prev => prev.filter(p => p !== part));
+    setCustomSoreness(prev => {
+      const next = { ...prev };
+      delete next[part];
+      return next;
+    });
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -92,20 +154,41 @@ export default function SessionLogDialog({
         });
       }
 
-      // Save soreness log
-      const hasSoreness = Object.values(soreness).some(v => v > 0);
-      if (hasSoreness) {
-        if (existingSorenessId) {
-          await supabase.from('soreness_logs').update({
-            knee: soreness.knee, hamstring: soreness.hamstring,
-            groin: soreness.groin, calf: soreness.calf,
-          }).eq('id', existingSorenessId);
-        } else {
+      // Delete existing soreness logs for this date to re-insert cleanly
+      await supabase.from('soreness_logs').delete().eq('athlete_id', athleteId).eq('date', dateStr);
+
+      // Insert base soreness row
+      const hasSoreness = Object.values(soreness).some(v => v > 0) || Object.values(customSoreness).some(v => v > 0);
+      if (hasSoreness || customParts.length > 0) {
+        // Insert base row (with first custom part if any, otherwise no other_label)
+        if (customParts.length === 0) {
           await supabase.from('soreness_logs').insert({
             athlete_id: athleteId, date: dateStr,
             knee: soreness.knee, hamstring: soreness.hamstring,
             groin: soreness.groin, calf: soreness.calf,
           });
+        } else {
+          // Insert one row per custom part (plus base defaults on first)
+          for (let i = 0; i < customParts.length; i++) {
+            const part = customParts[i];
+            await supabase.from('soreness_logs').insert({
+              athlete_id: athleteId, date: dateStr,
+              knee: i === 0 ? soreness.knee : 0,
+              hamstring: i === 0 ? soreness.hamstring : 0,
+              groin: i === 0 ? soreness.groin : 0,
+              calf: i === 0 ? soreness.calf : 0,
+              other_label: part,
+              other_value: customSoreness[part] || 0,
+            });
+          }
+          // If no custom parts had the base values yet and we only have custom parts
+          if (customParts.length === 0) {
+            await supabase.from('soreness_logs').insert({
+              athlete_id: athleteId, date: dateStr,
+              knee: soreness.knee, hamstring: soreness.hamstring,
+              groin: soreness.groin, calf: soreness.calf,
+            });
+          }
         }
       }
 
@@ -186,7 +269,8 @@ export default function SessionLogDialog({
                 Muscle Soreness
               </label>
               <div className="space-y-3 rounded-lg border border-border p-3 bg-secondary/30">
-                {MUSCLE_GROUPS.map(muscle => (
+                {/* Default muscles */}
+                {DEFAULT_MUSCLES.map(muscle => (
                   <div key={muscle} className="space-y-1">
                     <div className="flex items-center justify-between">
                       <span className="text-xs capitalize text-muted-foreground">{muscle}</span>
@@ -203,6 +287,62 @@ export default function SessionLogDialog({
                     />
                   </div>
                 ))}
+
+                {/* Custom body parts */}
+                {customParts.map(part => (
+                  <div key={part} className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs capitalize text-muted-foreground">{part}</span>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-bold ${sorenessColor(customSoreness[part] || 0)}`}>
+                          {customSoreness[part] || 0}/10
+                        </span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); removeCustomPart(part); }}
+                          className="text-muted-foreground hover:text-destructive transition-colors"
+                          title="Remove"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    </div>
+                    <Slider
+                      value={[customSoreness[part] || 0]}
+                      onValueChange={([v]) => setCustomSoreness(s => ({ ...s, [part]: v }))}
+                      min={0}
+                      max={10}
+                      step={1}
+                    />
+                  </div>
+                ))}
+
+                {/* Add custom part */}
+                {showAddPart ? (
+                  <div className="flex items-center gap-2 pt-1">
+                    <Input
+                      value={newPartLabel}
+                      onChange={e => setNewPartLabel(e.target.value)}
+                      placeholder="e.g. ankle, shoulder"
+                      className="h-8 text-xs"
+                      onKeyDown={e => e.key === 'Enter' && addCustomPart()}
+                      autoFocus
+                    />
+                    <Button size="sm" variant="secondary" className="h-8 px-3 text-xs" onClick={addCustomPart}>
+                      Add
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-8 px-2 text-xs" onClick={() => { setShowAddPart(false); setNewPartLabel(''); }}>
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowAddPart(true)}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors pt-1"
+                  >
+                    <Plus className="h-3 w-3" />
+                    Add body part
+                  </button>
+                )}
               </div>
             </div>
 
