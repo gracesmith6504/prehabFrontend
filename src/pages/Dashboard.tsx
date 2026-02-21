@@ -13,8 +13,6 @@ import { motion } from 'framer-motion';
 import {
   getCurrentPhase,
   calculateAcuteChronicRatio,
-  calculateSorenessContribution,
-  calculateRiskScore,
   PHASE_MULTIPLIERS,
   type MenstrualPhase,
   type PlanSession,
@@ -28,6 +26,7 @@ export default function Dashboard() {
   const { user, profile } = useAuth();
   const [riskScore, setRiskScore] = useState(0);
   const [riskLevel, setRiskLevel] = useState('Low');
+  const [riskConfidence, setRiskConfidence] = useState<number | null>(null);
   const [phase, setPhase] = useState<MenstrualPhase>('unknown');
   const [acRatio, setAcRatio] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -68,23 +67,38 @@ export default function Dashboard() {
         : 'unknown';
       setPhase(currentPhase);
 
+      // Fetch ML risk prediction from database (source of truth)
+      const { data: latestPrediction } = await supabase
+        .from('risk_predictions')
+        .select('risk_score, risk_level, confidence')
+        .eq('athlete_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (latestPrediction) {
+        setRiskScore(latestPrediction.risk_score);
+        setRiskLevel(latestPrediction.risk_level);
+        setRiskConfidence(latestPrediction.confidence);
+      }
+
+      // AC ratio for display only (from training sessions)
       const since = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       const { data: sessions } = await supabase
         .from('training_sessions').select('date, duration, rpe, intensity').eq('athlete_id', user.id).gte('date', since);
       const ratio = calculateAcuteChronicRatio(sessions || []);
       setAcRatio(ratio);
 
-      const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      const { data: soreness } = await supabase
-        .from('soreness_logs').select('knee, hamstring, groin, calf, other_value').eq('athlete_id', user.id).gte('date', threeDaysAgo).order('date', { ascending: false });
-      const sorenessContrib = calculateSorenessContribution(soreness || []);
-      const risk = calculateRiskScore(currentPhase, ratio, sorenessContrib);
-      setRiskScore(risk.score);
-      setRiskLevel(risk.level);
-
-      const { data: prevReports } = await supabase
-        .from('risk_reports').select('risk_score').eq('athlete_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
-      if (prevReports) setPreviousScore(prevReports.risk_score);
+      // Previous score for trend comparison (second most recent prediction)
+      const { data: prevPredictions } = await supabase
+        .from('risk_predictions')
+        .select('risk_score')
+        .eq('athlete_id', user.id)
+        .order('created_at', { ascending: false })
+        .range(1, 1);
+      if (prevPredictions && prevPredictions.length > 0) {
+        setPreviousScore(prevPredictions[0].risk_score);
+      }
 
       // Get today's planned session from weekly plan
       const { data: plan } = await supabase
