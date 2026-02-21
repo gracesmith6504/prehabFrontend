@@ -3,18 +3,16 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { motion } from 'framer-motion';
 import {
-  Activity, LogOut, BarChart3, Calendar, Dumbbell, HeartPulse,
-  ClipboardList, History, LayoutDashboard, AlertTriangle,
+  Activity, LogOut, BarChart3, Calendar, HeartPulse,
+  ClipboardList, LayoutDashboard, AlertTriangle,
   TrendingUp, FileText, Settings,
 } from 'lucide-react';
 
 const athleteNav = [
   { path: '/dashboard', label: 'Dashboard', icon: Activity },
   { path: '/cycle-setup', label: 'Cycle', icon: Calendar },
-  { path: '/training-log', label: 'Training', icon: Dumbbell },
-  { path: '/training-history', label: 'History', icon: History },
+  { path: '/plan', label: 'Training Plan', icon: ClipboardList },
   { path: '/soreness-log', label: 'Soreness', icon: HeartPulse },
-  { path: '/plan', label: 'Plan', icon: ClipboardList },
   { path: '/risk-report', label: 'Risk', icon: BarChart3 },
 ];
 
