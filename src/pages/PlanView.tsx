@@ -9,9 +9,10 @@ import {
   getCurrentPhase, calculateAcuteChronicRatio, calculateSorenessContribution,
   calculateRiskScore, type PlanSession, type MenstrualPhase,
 } from '@/lib/riskEngine';
-import { ClipboardList, ArrowRight, Calendar, Bot, Clock } from 'lucide-react';
+import { ClipboardList, ArrowRight, Calendar, Bot, Clock, ShieldCheck } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
 
 interface AgentRunMeta {
@@ -34,6 +35,7 @@ export default function PlanView() {
   const [riskProb, setRiskProb] = useState<number | null>(null);
   const [agentRunId, setAgentRunId] = useState<string | null>(null);
   const [riskPredictionId, setRiskPredictionId] = useState<string | null>(null);
+  const [planOwnerType, setPlanOwnerType] = useState<string>('athlete');
 
   useEffect(() => {
     if (!user) return;
@@ -62,6 +64,7 @@ export default function PlanView() {
       if (savedPlan) {
         setWeeklyPlanId(savedPlan.id);
         setAgentRunId(savedPlan.agent_run_id);
+        setPlanOwnerType(savedPlan.plan_owner_type || 'athlete');
 
         // Fetch agent run metadata if linked
         if (savedPlan.agent_run_id) {
@@ -77,25 +80,43 @@ export default function PlanView() {
         setRiskPredictionId(pred.id);
       }
 
+      const isCoachPlan = (savedPlan?.plan_owner_type || 'athlete') === 'coach';
+
       const basePlan = savedPlan?.original_plan
         ? (savedPlan.original_plan as unknown as PlanSession[])
         : generateDefaultPlan();
       setOriginal(basePlan);
 
-      const result = adjustPlan(basePlan, risk.score);
-      setAdjusted(result.adjusted);
-      setChanges(result.changes);
-      setExplanation(generateExplanation(phase, risk.score, ratio, sorenessContrib, result.changes));
+      // For coach plans, use saved adjusted_plan if available; otherwise compute
+      if (isCoachPlan && savedPlan?.adjusted_plan) {
+        const savedAdjusted = savedPlan.adjusted_plan as unknown as PlanSession[];
+        setAdjusted(savedAdjusted);
+        // Compute changes by diffing original vs adjusted
+        const diffChanges: string[] = [];
+        basePlan.forEach((o, i) => {
+          const a = savedAdjusted[i];
+          if (a && (o.type !== a.type || o.intensity !== a.intensity || o.duration !== a.duration)) {
+            diffChanges.push(`${o.day}: ${o.type} (${o.intensity}, ${o.duration}min) → ${a.type} (${a.intensity}, ${a.duration}min)`);
+          }
+        });
+        setChanges(diffChanges);
+        setExplanation(savedPlan.explanation || 'This plan was assigned by your coach. The AI has adjusted it based on your current risk profile.');
+      } else {
+        const result = adjustPlan(basePlan, risk.score);
+        setAdjusted(result.adjusted);
+        setChanges(result.changes);
+        setExplanation(generateExplanation(phase, risk.score, ratio, sorenessContrib, result.changes));
+      }
 
-      // Save plan if no saved plan exists
+      // Save plan only if no saved plan exists AND it's not a coach plan
       if (!savedPlan) {
         const { data: newPlan } = await supabase.from('weekly_plans').insert({
           athlete_id: user.id,
           original_plan: basePlan as any,
-          adjusted_plan: result.adjusted as any,
+          adjusted_plan: adjustPlan(basePlan, risk.score).adjusted as any,
           risk_score: risk.score,
           risk_level: risk.level,
-          explanation: generateExplanation(phase, risk.score, ratio, sorenessContrib, result.changes),
+          explanation: generateExplanation(phase, risk.score, ratio, sorenessContrib, adjustPlan(basePlan, risk.score).changes),
         }).select('id').maybeSingle();
         if (newPlan) setWeeklyPlanId(newPlan.id);
       }
@@ -140,8 +161,18 @@ export default function PlanView() {
             <h1 className="text-3xl font-heading font-bold flex items-center gap-3">
               <ClipboardList className="h-8 w-8 text-primary" />
               WEEKLY PLAN
+              {planOwnerType === 'coach' && (
+                <Badge variant="secondary" className="ml-2 gap-1 text-xs font-semibold uppercase tracking-wider">
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  Coach Plan
+                </Badge>
+              )}
             </h1>
-            <p className="text-muted-foreground mt-1">AI-adjusted based on your current risk profile.</p>
+            <p className="text-muted-foreground mt-1">
+              {planOwnerType === 'coach'
+                ? 'Baseline assigned by your coach. AI-adjusted based on your risk profile.'
+                : 'AI-adjusted based on your current risk profile.'}
+            </p>
           </div>
           <RiskBadge level={riskLevel} />
         </div>
@@ -184,8 +215,14 @@ export default function PlanView() {
 
         <Tabs defaultValue="calendar" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="calendar" className="gap-2"><Calendar className="h-4 w-4" /> Calendar View</TabsTrigger>
-            <TabsTrigger value="comparison" className="gap-2"><ArrowRight className="h-4 w-4" /> Comparison View</TabsTrigger>
+            <TabsTrigger value="calendar" className="gap-2">
+              <Calendar className="h-4 w-4" />
+              {planOwnerType === 'coach' ? 'AI-Adjusted Plan' : 'Calendar View'}
+            </TabsTrigger>
+            <TabsTrigger value="comparison" className="gap-2">
+              <ArrowRight className="h-4 w-4" />
+              {planOwnerType === 'coach' ? 'Baseline vs Adjusted' : 'Comparison View'}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="calendar" className="mt-4">
