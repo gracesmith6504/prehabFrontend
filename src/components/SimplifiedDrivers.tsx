@@ -5,31 +5,31 @@ import { Activity } from 'lucide-react';
 
 interface RiskDriver {
   feature: string;
+  label?: string;
   value: number | string;
   contribution: number;
 }
 
-const LABEL_MAP: Record<string, string> = {
+const FALLBACK_LABEL_MAP: Record<string, string> = {
   'ac_ratio': 'Load spike',
   'acute_chronic_ratio': 'Load spike',
   'phase_multiplier': 'Cycle phase risk',
   'soreness': 'Soreness elevated',
   'soreness_contribution': 'Soreness elevated',
   'rpe': 'High effort',
+  'session_rpe': 'High effort',
   'duration': 'Session length',
   'menstrual_phase': 'Cycle phase',
+  'weekly_load': 'High training volume',
 };
 
-function toPlainLabel(feature: string): string {
-  const lower = feature.toLowerCase().replace(/\s+/g, '_');
-  if (LABEL_MAP[lower]) return LABEL_MAP[lower];
-  // Try partial matches
-  if (lower.includes('phase') || lower.includes('luteal') || lower.includes('menstr')) return 'Cycle phase';
-  if (lower.includes('load') || lower.includes('ratio') || lower.includes('acute')) return 'Load spike';
-  if (lower.includes('sore')) return 'Soreness elevated';
-  if (lower.includes('rpe') || lower.includes('effort')) return 'High effort';
-  // Fallback: capitalize
-  return feature.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+function toPlainLabel(driver: RiskDriver): string {
+  // Prefer ML-provided label
+  if (driver.label) return driver.label;
+  // Fallback to mapping
+  const lower = driver.feature.toLowerCase().replace(/\s+/g, '_');
+  if (FALLBACK_LABEL_MAP[lower]) return FALLBACK_LABEL_MAP[lower];
+  return driver.feature.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
 interface Props {
@@ -60,7 +60,7 @@ export default function SimplifiedDrivers({ athleteId, drivers: propDrivers }: P
   if (!drivers.length) return null;
 
   // Deduplicate labels
-  const labels = [...new Set(drivers.slice(0, 4).map(d => toPlainLabel(d.feature)))];
+  const labels = [...new Set(drivers.slice(0, 4).map(d => toPlainLabel(d)))];
 
   return (
     <div className="glass-card p-5 space-y-3">
