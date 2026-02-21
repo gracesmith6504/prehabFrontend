@@ -7,22 +7,13 @@ const corsHeaders = {
 };
 
 // ============================================
-// Risk Engine (server-side copy of core logic)
+// Feature computation helpers
 // ============================================
-type MenstrualPhase = "menstruation" | "follicular" | "ovulatory" | "luteal" | "unknown";
 
-const PHASE_MULTIPLIERS: Record<MenstrualPhase, number> = {
-  menstruation: 1.0, follicular: 1.1, ovulatory: 1.4, luteal: 1.2, unknown: 1.0,
-};
-
-function getCurrentPhase(start: string | null, len: number, menLen: number): MenstrualPhase {
-  if (!start) return "unknown";
+function getCycleDayInt(start: string | null, cycleLen: number): number {
+  if (!start) return 0;
   const diff = Math.floor((Date.now() - new Date(start).getTime()) / 86400000);
-  const day = ((diff % len) + len) % len;
-  if (day < menLen) return "menstruation";
-  if (day < len * 0.4) return "follicular";
-  if (day < len * 0.5) return "ovulatory";
-  return "luteal";
+  return ((diff % cycleLen) + cycleLen) % cycleLen;
 }
 
 function calcLoadScore(dur: number, rpe: number, intensity: string): number {
@@ -44,45 +35,114 @@ function calcACR(sessions: any[]): number {
   return acute / weekAvg;
 }
 
-function calcSoreness(logs: any[]): number {
-  if (!logs.length) return 0;
-  const l = logs[0];
-  const max = Math.max(l.knee, l.hamstring, l.groin, l.calf, l.other_value || 0);
-  let c = max * 10;
-  if (logs.length >= 3) {
-    const avg = (x: any) => (x.knee + x.hamstring + x.groin + x.calf) / 4;
-    if (avg(logs[0]) > avg(logs[1]) && avg(logs[1]) > avg(logs[2])) c += 15;
+function computeWeeklyLoad(sessions: any[]): number {
+  const now = Date.now();
+  let total = 0;
+  for (const s of sessions) {
+    if (new Date(s.date).getTime() >= now - 7 * 86400000) {
+      total += calcLoadScore(s.duration, s.rpe, s.intensity);
+    }
   }
-  return Math.min(c, 100);
+  return total;
 }
 
-function getLoadMult(r: number) { return r > 1.5 ? 1.5 : r > 1.2 ? 1.2 : 1.0; }
-
-function calcRisk(phase: MenstrualPhase, acr: number, soreness: number) {
-  const pm = PHASE_MULTIPLIERS[phase];
-  const lm = getLoadMult(acr);
-  const load = Math.min(acr / 2.0 * 100, 100) * 0.4;
-  const phaseC = ((pm - 1.0) / 0.4) * 100 * 0.3;
-  const soreC = soreness * 0.3;
-  const score = Math.min(Math.round((load + phaseC + soreC) * lm * pm / 1.5), 100);
-  const level = score > 80 ? "High" : score > 60 ? "Medium" : "Low";
-  return { score, level, prob: score / 100 };
+function computeDaysSinceLastRest(sessions: any[]): number {
+  if (!sessions.length) return 0;
+  const sorted = [...sessions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  let consecutive = 0;
+  for (let i = 0; i < 28; i++) {
+    const checkDate = new Date(today.getTime() - i * 86400000).toISOString().split("T")[0];
+    if (sorted.some((s: any) => s.date === checkDate)) {
+      consecutive++;
+    } else {
+      break;
+    }
+  }
+  return consecutive;
 }
 
-function computeDrivers(phase: MenstrualPhase, acr: number, soreness: number) {
-  const pm = PHASE_MULTIPLIERS[phase];
-  const phaseC = (pm - 1.0) / 0.4;
-  const loadC = Math.min(acr / 2.0, 1);
-  const soreC = soreness / 100;
-  const total = phaseC + loadC + soreC || 1;
-  return [
-    { feature: "Acute:Chronic Ratio", value: acr, contribution: loadC / total },
-    { feature: "Menstrual Phase", value: phase, contribution: phaseC / total },
-    { feature: "Soreness", value: soreness, contribution: soreC / total },
-  ].sort((a: any, b: any) => b.contribution - a.contribution);
+function buildLast7DaysSoreness(soreLogs: any[]): number[] {
+  const result: number[] = [];
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  for (let i = 6; i >= 0; i--) {
+    const dateStr = new Date(today.getTime() - i * 86400000).toISOString().split("T")[0];
+    const dayLog = soreLogs.find((l: any) => l.date === dateStr);
+    if (dayLog) {
+      result.push(Math.round((dayLog.knee + dayLog.hamstring + dayLog.groin + dayLog.calf) / 4));
+    } else {
+      result.push(0);
+    }
+  }
+  return result;
 }
 
-// Plan generation
+function buildLast7DaysLoad(sessions: any[]): number[] {
+  const result: number[] = [];
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  for (let i = 6; i >= 0; i--) {
+    const dateStr = new Date(today.getTime() - i * 86400000).toISOString().split("T")[0];
+    const daySessions = sessions.filter((s: any) => s.date === dateStr);
+    const dayLoad = daySessions.reduce((sum: number, s: any) => sum + calcLoadScore(s.duration, s.rpe, s.intensity), 0);
+    result.push(Math.round(dayLoad * 100) / 100);
+  }
+  return result;
+}
+
+// ============================================
+// ML service caller
+// ============================================
+
+interface AnalysisResponse {
+  risk_profile: {
+    acl_risk: number;
+    soft_tissue_risk: number;
+    overtraining_risk: number;
+    recovery_status: number;
+    performance_readiness: number;
+  };
+  trend_analysis: {
+    load_trajectory: string;
+    soreness_trajectory: string;
+    cycle_risk_window: string;
+    acute_chronic_ratio: number;
+  };
+  contributing_factors: { factor: string; contribution: number; label: string }[];
+  confidence: number;
+  composite_risk_level: string;
+  recommended_actions: string[];
+  injury_window_forecast: {
+    next_3_days: string;
+    next_7_days: string;
+    next_14_days: string;
+  };
+  explanation: string | null;
+}
+
+async function callMLService(mlUrl: string, payload: any): Promise<AnalysisResponse> {
+  const resp = await fetch(`${mlUrl}/analyse/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!resp.ok) {
+    const body = await resp.text();
+    throw new Error(`ML service returned ${resp.status}: ${body}`);
+  }
+  return await resp.json();
+}
+
+function mapRiskLevel(composite: string): "Low" | "Medium" | "High" {
+  const lower = composite.toLowerCase();
+  if (lower.includes("high") || lower.includes("critical") || lower.includes("severe")) return "High";
+  if (lower.includes("medium") || lower.includes("moderate") || lower.includes("elevated")) return "Medium";
+  return "Low";
+}
+
+// ============================================
+// Plan generation (unchanged from original)
+// ============================================
+
 function defaultPlan() {
   return [
     { day: "Monday", type: "Strength", intensity: "Medium", duration: 60 },
@@ -132,22 +192,18 @@ function adjustPlan(original: any[], riskScore: number) {
   return { adjusted, changes };
 }
 
-function buildExplanation(phase: MenstrualPhase, score: number, acr: number, soreness: number, changes: string[]) {
-  const parts: string[] = [];
-  if (phase === "ovulatory") parts.push("Ovulatory phase — highest ACL injury risk.");
-  else if (phase === "luteal") parts.push("Luteal phase — moderately elevated risk.");
-  if (acr > 1.5) parts.push(`ACR (${acr.toFixed(2)}) indicates a training spike.`);
-  if (soreness > 50) parts.push("Soreness levels significantly elevated.");
-  if (changes.length) parts.push(`Adjustments: ${changes.join("; ")}.`);
-  if (score > 80) parts.push("⚠️ Risk very high. Consult physio or coach.");
-  return parts.join(" ") || "Risk within normal range.";
-}
-
 // ============================================
 // Main handler
 // ============================================
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  const mlEndpointUrl = Deno.env.get("ML_ENDPOINT_URL");
+  if (!mlEndpointUrl) {
+    return new Response(JSON.stringify({ error: "ML_ENDPOINT_URL not configured" }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -190,7 +246,7 @@ Deno.serve(async (req: Request) => {
     .limit(1)
     .maybeSingle();
 
-  const modelVersion = activeModel?.version || "rules-v1.0";
+  const modelVersion = activeModel?.version || "cloudrun-v1.0";
 
   // Create agent run
   const { data: agentRun, error: runErr } = await supabase
@@ -221,7 +277,7 @@ Deno.serve(async (req: Request) => {
       const uid = athlete.user_id;
 
       // ===== 1. OBSERVE =====
-      const phase = getCurrentPhase(athlete.cycle_start_date, athlete.cycle_length || 28, athlete.menstruation_length || 5);
+      const cycleDay = getCycleDayInt(athlete.cycle_start_date, athlete.cycle_length || 28);
       const since28 = new Date(Date.now() - 28 * 86400000).toISOString().split("T")[0];
       const since7 = new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0];
 
@@ -233,39 +289,89 @@ Deno.serve(async (req: Request) => {
 
       const { data: soreLogs } = await supabase
         .from("soreness_logs")
-        .select("knee, hamstring, groin, calf, other_value")
+        .select("date, knee, hamstring, groin, calf, other_value")
         .eq("athlete_id", uid)
         .gte("date", since7)
         .order("date", { ascending: false });
 
       await supabase.from("agent_actions").insert({
         agent_run_id: runId, athlete_id: uid, action_type: "observe",
-        details: { sessions_count: (sessions || []).length, soreness_logs_count: (soreLogs || []).length, phase },
+        details: { sessions_count: (sessions || []).length, soreness_logs_count: (soreLogs || []).length, cycle_day: cycleDay },
       });
 
-      // ===== 2. PREDICT =====
+      // ===== 2. BUILD ML PAYLOAD =====
       const acr = calcACR(sessions || []);
-      const sorenessC = calcSoreness(soreLogs || []);
-      const risk = calcRisk(phase, acr, sorenessC);
-      const topDrivers = computeDrivers(phase, acr, sorenessC);
+      const latestSore = (soreLogs && soreLogs.length > 0) ? soreLogs[0] : null;
+      const latestSession = sessions && sessions.length > 0
+        ? [...sessions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
+        : null;
 
+      const athleteInput = {
+        athlete_id: uid,
+        cycle_phase: cycleDay,
+        acute_chronic_ratio: Math.round(acr * 100) / 100,
+        knee_soreness: latestSore?.knee ?? 0,
+        hamstring_soreness: latestSore?.hamstring ?? 0,
+        groin_soreness: latestSore?.groin ?? 0,
+        session_rpe: latestSession?.rpe ?? 5,
+        weekly_load: computeWeeklyLoad(sessions || []),
+        days_since_last_rest: computeDaysSinceLastRest(sessions || []),
+        last_7_days_soreness: buildLast7DaysSoreness(soreLogs || []),
+        last_7_days_load: buildLast7DaysLoad(sessions || []),
+        previous_injuries: null,
+        total_injuries_past_year: 0,
+        days_since_last_injury: null,
+      };
+
+      // ===== 3. CALL ML SERVICE =====
+      let mlResponse: AnalysisResponse;
+      try {
+        mlResponse = await callMLService(mlEndpointUrl, athleteInput);
+      } catch (mlErr: any) {
+        const errMsg = `ML service error for athlete ${uid}: ${mlErr.message}`;
+        console.error(errMsg);
+        errors.push({ athlete_id: uid, error: errMsg });
+        await supabase.from("agent_actions").insert({
+          agent_run_id: runId, athlete_id: uid, action_type: "predict",
+          details: { error: errMsg, predictor_type: "ml", status: "failed" },
+        });
+        continue; // Skip this athlete — no fallback
+      }
+
+      // ===== MAP ML RESPONSE =====
+      const riskProb = mlResponse.risk_profile.acl_risk;
+      const riskScore = Math.round(riskProb * 100);
+      const riskLevel = mapRiskLevel(mlResponse.composite_risk_level);
+      const topDrivers = mlResponse.contributing_factors.map(f => ({
+        feature: f.factor,
+        value: f.contribution,
+        contribution: f.contribution,
+        label: f.label,
+      }));
+      const confidence = mlResponse.confidence;
+
+      // ===== 4. PREDICT (store) =====
       const { data: prediction } = await supabase
         .from("risk_predictions")
         .insert({
           athlete_id: uid, agent_run_id: runId,
-          risk_prob: risk.prob, risk_score: risk.score, risk_level: risk.level,
+          risk_prob: riskProb, risk_score: riskScore, risk_level: riskLevel,
           top_drivers: topDrivers, model_version: modelVersion,
-          predictor_type: "rules", confidence: 1.0,
+          predictor_type: "ml", confidence,
         })
         .select("id")
         .single();
 
       await supabase.from("agent_actions").insert({
         agent_run_id: runId, athlete_id: uid, action_type: "predict",
-        details: { risk_score: risk.score, risk_level: risk.level, risk_prob: risk.prob, predictor_type: "rules" },
+        details: {
+          risk_score: riskScore, risk_level: riskLevel, risk_prob: riskProb,
+          predictor_type: "ml", confidence,
+          composite_risk_level: mlResponse.composite_risk_level,
+        },
       });
 
-      // ===== 3. PLAN =====
+      // ===== 5. PLAN =====
       const { data: existingPlan } = await supabase
         .from("weekly_plans")
         .select("id, original_plan, locked_by_coach")
@@ -274,40 +380,57 @@ Deno.serve(async (req: Request) => {
         .limit(1)
         .maybeSingle();
 
-      // Respect coach lock — skip plan adjustment if locked
       const planLocked = existingPlan?.locked_by_coach === true;
-
       const basePlan = existingPlan?.original_plan || defaultPlan();
       const { adjusted, changes } = planLocked
         ? { adjusted: existingPlan?.original_plan as any[] || defaultPlan(), changes: [] as string[] }
-        : adjustPlan(basePlan as any[], risk.score);
+        : adjustPlan(basePlan as any[], riskScore);
 
-      // ===== 4. ACT =====
-      const explanation = planLocked
-        ? buildExplanation(phase, risk.score, acr, sorenessC, []) + " (Plan locked by coach — no adjustments made.)"
-        : buildExplanation(phase, risk.score, acr, sorenessC, changes);
+      // ===== 6. ACT =====
+      // Build explanation from ML response
+      const explanationParts: string[] = [];
+      if (mlResponse.explanation) explanationParts.push(mlResponse.explanation);
+      if (mlResponse.recommended_actions?.length) {
+        explanationParts.push(`Recommended: ${mlResponse.recommended_actions.join("; ")}.`);
+      }
+      if (planLocked) explanationParts.push("(Plan locked by coach — no adjustments made.)");
+      else if (changes.length) explanationParts.push(`Adjustments: ${changes.join("; ")}.`);
+      const explanation = explanationParts.join(" ") || `Risk ${riskLevel} (score: ${riskScore}).`;
+
+      // Compute phase name for risk_reports.phase column
+      const phaseDay = cycleDay;
+      const cycleLen = athlete.cycle_length || 28;
+      const menLen = athlete.menstruation_length || 5;
+      let phaseName = "unknown";
+      if (athlete.cycle_start_date) {
+        if (phaseDay < menLen) phaseName = "menstruation";
+        else if (phaseDay < cycleLen * 0.4) phaseName = "follicular";
+        else if (phaseDay < cycleLen * 0.5) phaseName = "ovulatory";
+        else phaseName = "luteal";
+      }
 
       // Write risk report
       await supabase.from("risk_reports").insert({
-        athlete_id: uid, risk_score: risk.score, risk_level: risk.level,
-        phase, phase_multiplier: PHASE_MULTIPLIERS[phase],
-        acute_chronic_ratio: acr, load_risk_multiplier: getLoadMult(acr),
-        soreness_contribution: sorenessC, explanation,
+        athlete_id: uid, risk_score: riskScore, risk_level: riskLevel,
+        phase: phaseName, phase_multiplier: 1.0,
+        acute_chronic_ratio: acr, load_risk_multiplier: 1.0,
+        soreness_contribution: latestSore ? Math.max(latestSore.knee, latestSore.hamstring, latestSore.groin, latestSore.calf) * 10 : 0,
+        explanation,
         escalation_status: "none",
         agent_run_id: runId, risk_prediction_id: prediction?.id,
       });
 
-      // Write/update weekly plan (skip update if locked)
+      // Write/update weekly plan
       if (existingPlan && !planLocked) {
         await supabase.from("weekly_plans").update({
-          adjusted_plan: adjusted, risk_score: risk.score,
-          risk_level: risk.level, explanation, agent_run_id: runId,
+          adjusted_plan: adjusted, risk_score: riskScore,
+          risk_level: riskLevel, explanation, agent_run_id: runId,
         }).eq("id", existingPlan.id);
       } else if (!existingPlan) {
         await supabase.from("weekly_plans").insert({
           athlete_id: uid, original_plan: basePlan,
-          adjusted_plan: adjusted, risk_score: risk.score,
-          risk_level: risk.level, explanation, agent_run_id: runId,
+          adjusted_plan: adjusted, risk_score: riskScore,
+          risk_level: riskLevel, explanation, agent_run_id: runId,
         });
       }
 
@@ -320,12 +443,12 @@ Deno.serve(async (req: Request) => {
       let shouldEscalate = false;
       let triggerReason = "";
 
-      if (risk.level === "High") {
+      if (riskLevel === "High") {
         shouldEscalate = true;
-        triggerReason = `risk_level=High (score: ${risk.score})`;
-      } else if (risk.prob > 0.8) {
+        triggerReason = `risk_level=High (score: ${riskScore})`;
+      } else if (riskProb > 0.8) {
         shouldEscalate = true;
-        triggerReason = `risk_prob=${risk.prob.toFixed(2)} > 0.8`;
+        triggerReason = `risk_prob=${riskProb.toFixed(2)} > 0.8`;
       }
 
       // Check 48h score spike
@@ -339,9 +462,9 @@ Deno.serve(async (req: Request) => {
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
-        if (recentPred && risk.score - recentPred.risk_score >= 15) {
+        if (recentPred && riskScore - Number(recentPred.risk_score) >= 15) {
           shouldEscalate = true;
-          triggerReason = `Score jumped +${risk.score - recentPred.risk_score} in 48h`;
+          triggerReason = `Score jumped +${riskScore - Number(recentPred.risk_score)} in 48h`;
         }
       }
 
@@ -357,10 +480,15 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      // ===== 5. JUSTIFY =====
+      // ===== 7. JUSTIFY =====
       await supabase.from("agent_actions").insert({
         agent_run_id: runId, athlete_id: uid, action_type: "justify",
-        details: { explanation, top_drivers: topDrivers, changes },
+        details: {
+          explanation, top_drivers: topDrivers, changes,
+          ml_confidence: confidence,
+          injury_forecast: mlResponse.injury_window_forecast,
+          trend_analysis: mlResponse.trend_analysis,
+        },
       });
 
       processed++;
