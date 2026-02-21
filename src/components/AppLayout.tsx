@@ -32,7 +32,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-background flex flex-col">
       {/* Top bar */}
       <header className="border-b border-border px-4 py-3 flex items-center justify-between">
-        <Link to="/dashboard" className="flex items-center gap-2">
+        <Link to="/" className="flex items-center gap-2">
           <Activity className="h-6 w-6 text-primary" />
           <span className="font-heading text-lg font-bold uppercase tracking-wider">CycleAgent</span>
         </Link>
