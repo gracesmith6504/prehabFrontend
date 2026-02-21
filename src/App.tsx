@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { ThemeProvider } from "next-themes";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import Home from "./pages/Home";
 import Auth from "./pages/Auth";
@@ -61,36 +62,38 @@ function PublicRoute({ children }: { children: ReactNode }) {
 }
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <Routes>
-            <Route path="/" element={<PublicRoute><Home /></PublicRoute>} />
-            <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
-            {/* Athlete routes */}
-            <Route path="/dashboard" element={<AthleteRoute><Dashboard /></AthleteRoute>} />
-            <Route path="/cycle-setup" element={<AthleteRoute><CycleSetup /></AthleteRoute>} />
-            <Route path="/training-log" element={<Navigate to="/plan" replace />} />
-            <Route path="/training-history" element={<Navigate to="/plan" replace />} />
-            <Route path="/soreness-log" element={<Navigate to="/plan" replace />} />
-            <Route path="/plan" element={<AthleteRoute><PlanView /></AthleteRoute>} />
-            <Route path="/risk-report" element={<AthleteRoute><RiskReport /></AthleteRoute>} />
-            {/* Coach routes */}
-            <Route path="/coach" element={<CoachRoute><CoachDashboard /></CoachRoute>} />
-            <Route path="/coach/escalations" element={<CoachRoute><CoachEscalations /></CoachRoute>} />
-            <Route path="/coach/analytics" element={<CoachRoute><CoachAnalytics /></CoachRoute>} />
-            <Route path="/coach/plans" element={<CoachRoute><CoachPlans /></CoachRoute>} />
-            <Route path="/coach/reports" element={<CoachRoute><CoachReports /></CoachRoute>} />
-            <Route path="/coach/settings" element={<CoachRoute><CoachSettings /></CoachRoute>} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
+  <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AuthProvider>
+            <Routes>
+              <Route path="/" element={<PublicRoute><Home /></PublicRoute>} />
+              <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
+              {/* Athlete routes */}
+              <Route path="/dashboard" element={<AthleteRoute><Dashboard /></AthleteRoute>} />
+              <Route path="/cycle-setup" element={<AthleteRoute><CycleSetup /></AthleteRoute>} />
+              <Route path="/training-log" element={<Navigate to="/plan" replace />} />
+              <Route path="/training-history" element={<Navigate to="/plan" replace />} />
+              <Route path="/soreness-log" element={<Navigate to="/plan" replace />} />
+              <Route path="/plan" element={<AthleteRoute><PlanView /></AthleteRoute>} />
+              <Route path="/risk-report" element={<AthleteRoute><RiskReport /></AthleteRoute>} />
+              {/* Coach routes */}
+              <Route path="/coach" element={<CoachRoute><CoachDashboard /></CoachRoute>} />
+              <Route path="/coach/escalations" element={<CoachRoute><CoachEscalations /></CoachRoute>} />
+              <Route path="/coach/analytics" element={<CoachRoute><CoachAnalytics /></CoachRoute>} />
+              <Route path="/coach/plans" element={<CoachRoute><CoachPlans /></CoachRoute>} />
+              <Route path="/coach/reports" element={<CoachRoute><CoachReports /></CoachRoute>} />
+              <Route path="/coach/settings" element={<CoachRoute><CoachSettings /></CoachRoute>} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </AuthProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  </ThemeProvider>
 );
 
 export default App;
