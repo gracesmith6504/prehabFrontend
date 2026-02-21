@@ -70,7 +70,7 @@ const App = () => (
         <BrowserRouter>
           <AuthProvider>
             <Routes>
-              <Route path="/" element={<PublicRoute><Home /></PublicRoute>} />
+              <Route path="/" element={<Home />} />
               <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
               {/* Athlete routes */}
               <Route path="/dashboard" element={<AthleteRoute><Dashboard /></AthleteRoute>} />
