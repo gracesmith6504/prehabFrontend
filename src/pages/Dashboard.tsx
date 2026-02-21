@@ -73,10 +73,8 @@ export default function Dashboard() {
   }, [user]);
 
   const quickActions = [
-    { path: '/training-log', label: 'Log Training', icon: Dumbbell, color: 'text-primary' },
-    { path: '/soreness-log', label: 'Log Soreness', icon: HeartPulse, color: 'text-primary' },
+    { path: '/plan', label: 'Training Plan', icon: ClipboardList, color: 'text-primary' },
     { path: '/cycle-setup', label: 'Update Cycle', icon: Calendar, color: 'text-primary' },
-    { path: '/plan', label: 'View Plan', icon: ClipboardList, color: 'text-primary' },
     { path: '/risk-report', label: 'Risk Report', icon: BarChart3, color: 'text-primary' },
   ];
 
