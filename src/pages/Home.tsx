@@ -30,7 +30,7 @@ export default function Home() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            <h1 className="text-6xl md:text-8xl lg:text-9xl font-heading font-bold leading-[0.9] mb-6">
+            <h1 className="text-5xl md:text-7xl lg:text-8xl font-heading font-bold leading-[0.9] mb-6">
               TRAIN<br />SMARTER<br />
               <span className="text-primary text-glow">WITH YOUR</span><br />
               <span className="text-primary text-glow">BODY</span>
