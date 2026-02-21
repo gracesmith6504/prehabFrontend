@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { motion } from 'framer-motion';
 import {
-  Activity, LogOut, BarChart3, Calendar, HeartPulse,
+  Activity, LogOut, BarChart3, Calendar,
   ClipboardList, LayoutDashboard, AlertTriangle,
   TrendingUp, FileText, Settings,
 } from 'lucide-react';
@@ -12,7 +12,6 @@ const athleteNav = [
   { path: '/dashboard', label: 'Dashboard', icon: Activity },
   { path: '/cycle-setup', label: 'Cycle', icon: Calendar },
   { path: '/plan', label: 'Training Plan', icon: ClipboardList },
-  { path: '/soreness-log', label: 'Soreness', icon: HeartPulse },
   { path: '/risk-report', label: 'Risk', icon: BarChart3 },
 ];
 
