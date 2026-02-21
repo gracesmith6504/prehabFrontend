@@ -153,12 +153,34 @@ Deno.serve(async (req: Request) => {
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, serviceKey);
 
-  // Determine trigger type
+  // Determine trigger type and coach_id
   let triggerType = "manual";
+  let coachId: string | null = null;
   try {
     const body = await req.json();
     if (body?.trigger_type) triggerType = body.trigger_type;
+    if (body?.coach_id) coachId = body.coach_id;
   } catch { /* no body is fine */ }
+
+  // If no coach_id in body, try to get it from the auth header
+  if (!coachId) {
+    const authHeader = req.headers.get("Authorization");
+    if (authHeader) {
+      const anonUrl = Deno.env.get("SUPABASE_URL")!;
+      const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+      const { createClient: createAnonClient } = await import("https://esm.sh/@supabase/supabase-js@2");
+      const anonSupabase = createAnonClient(anonUrl, anonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: { user } } = await anonSupabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await anonSupabase.from("profiles").select("role").eq("user_id", user.id).maybeSingle();
+        if (profile?.role === "coach") {
+          coachId = user.id;
+        }
+      }
+    }
+  }
 
   // Get active model version
   const { data: activeModel } = await supabase
@@ -187,8 +209,12 @@ Deno.serve(async (req: Request) => {
   const errors: any[] = [];
   let processed = 0;
 
-  // Fetch all athletes
-  const { data: athletes } = await supabase.from("athlete_profiles").select("*");
+  // Fetch athletes — scoped to coach if coach_id is available
+  let athleteQuery = supabase.from("athlete_profiles").select("*");
+  if (coachId) {
+    athleteQuery = athleteQuery.eq("coach_id", coachId);
+  }
+  const { data: athletes } = await athleteQuery;
 
   for (const athlete of athletes || []) {
     try {

@@ -121,7 +121,7 @@ export default function CoachDashboard() {
     setRunningAgent(true);
     try {
       const { data, error } = await supabase.functions.invoke('agent-runner', {
-        body: { trigger_type: 'manual' },
+        body: { trigger_type: 'manual', coach_id: user?.id },
       });
       if (error) throw error;
       toast.success(`Agent completed — ${data?.athletes_processed || 0} athletes processed`);

@@ -16,14 +16,19 @@ export default function CoachQuickActions({ onViewAnalytics, onReviewEscalations
   { label: 'Export Report', icon: Download, onClick: () => toast.info('Report export coming soon') }];
 
 
-  return;
-
-
-
-
-
-
-
-
-
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+      {actions.map((action) => (
+        <Button
+          key={action.label}
+          variant="outline"
+          className="flex flex-col items-center gap-2 h-auto py-4 font-heading text-xs uppercase tracking-wider"
+          onClick={action.onClick}
+        >
+          <action.icon className="h-5 w-5 text-primary" />
+          {action.label}
+        </Button>
+      ))}
+    </div>
+  );
 }
