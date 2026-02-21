@@ -120,7 +120,7 @@ interface AnalysisResponse {
 }
 
 async function callMLService(mlUrl: string, payload: any): Promise<AnalysisResponse> {
-  const url = `${mlUrl}/analyse/`;
+  const url = `${mlUrl.replace(/\/+$/, '')}/analyse/`;
   const bodyStr = JSON.stringify(payload);
   console.log(`[DEBUG] Calling ML service: ${url}`);
   console.log(`[DEBUG] Payload: ${bodyStr}`);
