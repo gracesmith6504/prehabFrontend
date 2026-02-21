@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Legend, Bar, ComposedChart } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine } from 'recharts';
 import { TrendingUp } from 'lucide-react';
 
 const chartConfig = {
   avg: { label: 'Avg Risk', color: 'hsl(var(--primary))' },
-  highCount: { label: 'High-Risk Athletes', color: 'hsl(var(--destructive))' },
+  highCount: { label: 'High-Risk Athletes', color: 'hsl(var(--muted-foreground))' },
 };
 
 interface Props {
@@ -29,7 +29,6 @@ export default function SquadRiskTrendChart({ athleteIds }: Props) {
         .order('created_at', { ascending: true });
 
       if (!reports?.length) {
-        // Generate mock data
         const mock = Array.from({ length: 30 }, (_, i) => {
           const d = new Date(Date.now() - (29 - i) * 86400000);
           return {
@@ -42,7 +41,6 @@ export default function SquadRiskTrendChart({ athleteIds }: Props) {
         return;
       }
 
-      // Group by day
       const byDay: Record<string, { scores: number[] }> = {};
       for (const r of reports) {
         const day = new Date(r.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
@@ -62,23 +60,63 @@ export default function SquadRiskTrendChart({ athleteIds }: Props) {
   return (
     <Card className="border-border bg-card">
       <CardHeader className="pb-2">
-        <CardTitle className="text-lg font-heading flex items-center gap-2">
-          <TrendingUp className="h-5 w-5 text-primary" />
-          Squad Risk Trend (30 Days)
+        <CardTitle className="text-sm font-heading uppercase tracking-wider flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 text-primary" />
+          Squad Risk Trend
+          <span className="text-xs font-normal text-muted-foreground ml-1">30 days</span>
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={chartConfig} className="h-[200px] sm:h-[260px] w-full">
-          <ComposedChart data={data} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" />
-            <XAxis dataKey="date" className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} interval="preserveStartEnd" />
-            <YAxis yAxisId="left" domain={[0, 100]} className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
-            <YAxis yAxisId="right" orientation="right" className="text-xs" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+        <ChartContainer config={chartConfig} className="h-[220px] sm:h-[260px] w-full">
+          <LineChart data={data} margin={{ top: 8, right: 12, left: -10, bottom: 4 }}>
+            <CartesianGrid
+              strokeDasharray="3 3"
+              vertical={false}
+              stroke="hsl(var(--border))"
+              strokeOpacity={0.5}
+            />
+            <XAxis
+              dataKey="date"
+              tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
+              tickLine={false}
+              axisLine={false}
+              interval="preserveStartEnd"
+            />
+            <YAxis
+              domain={[0, 100]}
+              tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
+              tickLine={false}
+              axisLine={false}
+              width={30}
+            />
+            <ReferenceLine
+              y={75}
+              stroke="hsl(var(--destructive))"
+              strokeDasharray="4 4"
+              strokeOpacity={0.35}
+              label={{ value: 'High', position: 'right', fill: 'hsl(var(--muted-foreground))', fontSize: 9 }}
+            />
             <ChartTooltip content={<ChartTooltipContent />} />
-            <Legend />
-            <Line yAxisId="left" type="monotone" dataKey="avg" stroke="var(--color-avg)" strokeWidth={2.5} dot={false} name="Avg Risk" />
-            <Bar yAxisId="right" dataKey="highCount" fill="var(--color-highCount)" opacity={0.4} name="High-Risk Athletes" />
-          </ComposedChart>
+            <Line
+              type="monotone"
+              dataKey="avg"
+              stroke="var(--color-avg)"
+              strokeWidth={2}
+              dot={false}
+              activeDot={{ r: 4, strokeWidth: 0, fill: 'hsl(var(--primary))' }}
+              name="Avg Risk"
+            />
+            <Line
+              type="monotone"
+              dataKey="highCount"
+              stroke="var(--color-highCount)"
+              strokeWidth={1}
+              strokeDasharray="4 3"
+              dot={false}
+              activeDot={{ r: 3, strokeWidth: 0, fill: 'hsl(var(--muted-foreground))' }}
+              name="High-Risk Athletes"
+            />
+          </LineChart>
         </ChartContainer>
       </CardContent>
     </Card>
