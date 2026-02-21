@@ -14,8 +14,9 @@ export default {
     },
     extend: {
       fontFamily: {
-        heading: ['Space Grotesk', 'sans-serif'],
-        body: ['Inter', 'sans-serif'],
+        heading: ['Garet', 'Space Grotesk', 'sans-serif'],
+        body: ['Inter', 'system-ui', 'sans-serif'],
+        tagline: ['Montserrat', 'Gotham', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",
