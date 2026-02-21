@@ -2,12 +2,13 @@ import { ReactNode } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { motion } from 'framer-motion';
-import { Activity, User, LogOut, BarChart3, Calendar, Dumbbell, HeartPulse, ClipboardList, Shield } from 'lucide-react';
+import { Activity, User, LogOut, BarChart3, Calendar, Dumbbell, HeartPulse, ClipboardList, Shield, History } from 'lucide-react';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: Activity },
   { path: '/cycle-setup', label: 'Cycle', icon: Calendar },
   { path: '/training-log', label: 'Training', icon: Dumbbell },
+  { path: '/training-history', label: 'History', icon: History },
   { path: '/soreness-log', label: 'Soreness', icon: HeartPulse },
   { path: '/plan', label: 'Plan', icon: ClipboardList },
   { path: '/risk-report', label: 'Risk', icon: BarChart3 },

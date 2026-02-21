@@ -13,6 +13,7 @@ import SorenessLog from "./pages/SorenessLog";
 import PlanView from "./pages/PlanView";
 import RiskReport from "./pages/RiskReport";
 import CoachDashboard from "./pages/CoachDashboard";
+import TrainingHistory from "./pages/TrainingHistory";
 import NotFound from "./pages/NotFound";
 import { ReactNode } from "react";
 
@@ -49,6 +50,7 @@ const App = () => (
             <Route path="/plan" element={<ProtectedRoute><PlanView /></ProtectedRoute>} />
             <Route path="/risk-report" element={<ProtectedRoute><RiskReport /></ProtectedRoute>} />
             <Route path="/coach" element={<ProtectedRoute><CoachDashboard /></ProtectedRoute>} />
+            <Route path="/training-history" element={<ProtectedRoute><TrainingHistory /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
