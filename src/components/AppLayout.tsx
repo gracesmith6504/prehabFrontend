@@ -53,7 +53,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           >
             <Menu className="h-5 w-5 text-muted-foreground" />
           </button>
-          <Link to={profile?.role === 'coach' ? '/coach' : '/dashboard'} className="flex items-center gap-2">
+          <Link to="/" className="flex items-center gap-2">
             <Activity className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
             <span className="font-heading text-base sm:text-lg font-bold uppercase tracking-wider">CycleAgent</span>
           </Link>
