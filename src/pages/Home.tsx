@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowRight, Shield, Brain, TrendingUp } from 'lucide-react';
 import heroImage from '@/assets/soccer-women-hero.jpg';
+import prehabLogo from '@/assets/prehab-logo.png';
 
 export default function Home() {
   return (
@@ -17,9 +18,12 @@ export default function Home() {
 
         {/* Top label */}
         <div className="relative z-10 px-6 md:px-12 pt-10">
-          <span className="text-primary text-xs font-bold uppercase tracking-[0.3em]">
-            Cycle-Aware AI Training
-          </span>
+          <div className="flex items-center gap-2">
+            <img src={prehabLogo} alt="PREHAB logo" className="h-8 w-8" />
+            <span className="text-primary text-xs font-bold uppercase tracking-[0.3em]">
+              PREHAB
+            </span>
+          </div>
         </div>
 
         {/* Hero content */}
@@ -88,7 +92,7 @@ export default function Home() {
       {/* Footer */}
       <footer className="border-t border-border py-8">
         <div className="container text-center text-sm text-muted-foreground">
-          © 2026 CycleAgent — Autonomous Cycle-Aware Training Optimisation
+          © 2026 PREHAB — Autonomous Cycle-Aware Training Optimisation
         </div>
       </footer>
     </div>
