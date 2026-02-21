@@ -5,6 +5,7 @@ import AppLayout from '@/components/AppLayout';
 import RiskBadge from '@/components/RiskBadge';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -470,12 +471,19 @@ export default function CoachEscalations() {
         <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
           {selected && (
             <>
-              <SheetHeader>
-                <SheetTitle className="font-heading uppercase tracking-wider flex items-center gap-2">
-                  <ShieldAlert className="h-5 w-5 text-primary" />
-                  {selected.athlete_name}
-                </SheetTitle>
-                <SheetDescription>{selected.trigger_reason}</SheetDescription>
+              <SheetHeader className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <SheetTitle className="font-heading uppercase tracking-wider">
+                    {selected.athlete_name}
+                  </SheetTitle>
+                  <RiskBadge level={selected.risk_level} />
+                  <span className="font-heading font-bold tabular-nums" style={{ color: riskColor(selected.risk_score) }}>
+                    {selected.risk_score}
+                  </span>
+                </div>
+                <SheetDescription className="text-sm text-foreground/80">
+                  {selected.trigger_reason.replace(/risk_level=\w+\s*\(score:\s*\d+\)/gi, '').trim() || selected.trigger_reason}
+                </SheetDescription>
               </SheetHeader>
 
               <div className="mt-6 space-y-6">
@@ -499,46 +507,38 @@ export default function CoachEscalations() {
                   </section>
                 )}
 
-                {/* Risk breakdown */}
-                <section className="space-y-3">
-                  <h3 className="font-heading text-sm font-bold uppercase tracking-wider text-muted-foreground">Risk Breakdown</h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    <MetricCard label="Risk Score" value={selected.risk_score} />
+                {/* Compact metrics row */}
+                <section>
+                  <div className="grid grid-cols-4 gap-2">
+                    <MetricCard label="Risk" value={selected.risk_score} />
                     <MetricCard label="Phase" value={selected.phase} />
-                    <MetricCard label="AC Ratio" value={selected.acr.toFixed(2)} />
+                    <MetricCard label="ACR" value={selected.acr.toFixed(2)} />
                     <MetricCard label="Soreness" value={selected.soreness} />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <RiskBadge level={selected.risk_level} />
                   </div>
                 </section>
 
-                {/* Top drivers */}
+                {/* Top drivers — plain language */}
                 {selected.top_drivers.length > 0 && (
-                  <section className="space-y-3">
-                    <h3 className="font-heading text-sm font-bold uppercase tracking-wider text-muted-foreground">Top Drivers</h3>
-                    <div className="space-y-2">
+                  <section className="space-y-2">
+                    <h3 className="font-heading text-sm font-bold uppercase tracking-wider text-muted-foreground">Key Drivers</h3>
+                    <div className="space-y-1.5">
                       {selected.top_drivers.slice(0, 3).map((d, i) => (
-                        <div key={i} className="flex items-center justify-between text-sm">
-                          <span className="text-foreground">{d.feature}</span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground">{typeof d.value === 'number' ? d.value.toFixed(1) : d.value}</span>
-                            <div className="w-16 h-1.5 bg-secondary rounded-full overflow-hidden">
-                              <div className="h-full bg-primary rounded-full" style={{ width: `${Math.min(d.contribution * 100, 100)}%` }} />
-                            </div>
-                            <span className="text-xs text-muted-foreground w-8">{Math.round(d.contribution * 100)}%</span>
-                          </div>
-                        </div>
+                        <p key={i} className={`text-sm ${i === 0 ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
+                          {i === 0 && <TrendingUp className="h-3.5 w-3.5 inline mr-1.5 text-primary" />}
+                          {d.feature}: {typeof d.value === 'number' ? d.value.toFixed(1) : d.value}
+                        </p>
                       ))}
                     </div>
                   </section>
                 )}
 
-                {/* Explanation */}
+                {/* Plan Adjustments Applied */}
                 {selected.explanation && (
                   <section className="space-y-2">
-                    <h3 className="font-heading text-sm font-bold uppercase tracking-wider text-muted-foreground">Agent Explanation</h3>
-                    <p className="text-sm text-foreground leading-relaxed glass-card p-3">{selected.explanation}</p>
+                    <h3 className="font-heading text-sm font-bold uppercase tracking-wider text-muted-foreground">Plan Adjustments Applied</h3>
+                    <div className="text-sm text-foreground leading-relaxed rounded-lg border border-border bg-secondary/30 p-3">
+                      {selected.explanation}
+                    </div>
                   </section>
                 )}
 
@@ -546,48 +546,47 @@ export default function CoachEscalations() {
                 {selected.notes && (
                   <section className="space-y-2">
                     <h3 className="font-heading text-sm font-bold uppercase tracking-wider text-muted-foreground">Notes</h3>
-                    <pre className="text-sm text-muted-foreground whitespace-pre-wrap glass-card p-3 font-body">{selected.notes}</pre>
+                    <pre className="text-sm text-muted-foreground whitespace-pre-wrap rounded-lg border border-border p-3 font-body">{selected.notes}</pre>
                   </section>
                 )}
 
-                {/* Recent agent actions */}
-                <section className="space-y-3">
-                  <h3 className="font-heading text-sm font-bold uppercase tracking-wider text-muted-foreground">Recent Agent Actions</h3>
-                  {drawerLoading ? (
-                    <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full rounded-lg" />)}</div>
-                  ) : drawerActions.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No recent agent actions.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {drawerActions.map(a => (
-                        <div key={a.id} className="flex items-start gap-3 text-sm glass-card p-3">
-                          <ActionIcon type={a.action_type} />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-bold capitalize text-foreground">{a.action_type}</span>
-                              <span className="text-xs text-muted-foreground whitespace-nowrap">{formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}</span>
-                            </div>
-                            {a.details && a.action_type === 'act' && a.details.changes && (
-                              <ul className="mt-1 text-xs text-muted-foreground list-disc list-inside">
-                                {(a.details.changes as string[]).slice(0, 3).map((c, i) => <li key={i}>{c}</li>)}
-                              </ul>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </section>
-
-                {/* Timeline */}
+                {/* Compact status summary */}
                 <section className="space-y-2">
-                  <h3 className="font-heading text-sm font-bold uppercase tracking-wider text-muted-foreground">Timeline</h3>
-                  <div className="space-y-2 text-sm">
-                    <TimelineEntry icon={<AlertTriangle className="h-3.5 w-3.5 text-muted-foreground" />} label="Created" time={selected.created_at} />
-                    {selected.acknowledged_at && <TimelineEntry icon={<Eye className="h-3.5 w-3.5 text-warning" />} label="Acknowledged" time={selected.acknowledged_at} />}
-                    {selected.resolved_at && <TimelineEntry icon={<CheckCircle2 className="h-3.5 w-3.5 text-primary" />} label="Resolved" time={selected.resolved_at} />}
+                  <h3 className="font-heading text-sm font-bold uppercase tracking-wider text-muted-foreground">Status</h3>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                    <span>Created {format(new Date(selected.created_at), 'MMM d, HH:mm')}</span>
+                    {selected.acknowledged_at && <span>· Acknowledged {format(new Date(selected.acknowledged_at), 'MMM d, HH:mm')}</span>}
+                    {selected.resolved_at && <span>· Resolved {format(new Date(selected.resolved_at), 'MMM d, HH:mm')}</span>}
                   </div>
                 </section>
+
+                {/* Technical Details — collapsed accordion */}
+                <Accordion type="single" collapsible>
+                  <AccordionItem value="technical" className="border-border/50">
+                    <AccordionTrigger className="text-xs text-muted-foreground font-heading uppercase tracking-wider hover:no-underline py-2">
+                      Technical Details
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="space-y-2 pt-1">
+                        {drawerLoading ? (
+                          <div className="space-y-2">{[1, 2].map(i => <Skeleton key={i} className="h-8 w-full rounded-lg" />)}</div>
+                        ) : drawerActions.length === 0 ? (
+                          <p className="text-xs text-muted-foreground">No recent agent actions.</p>
+                        ) : (
+                          drawerActions.map(a => (
+                            <div key={a.id} className="flex items-center justify-between text-xs text-muted-foreground">
+                              <div className="flex items-center gap-2">
+                                <ActionIcon type={a.action_type} />
+                                <span className="capitalize">{a.action_type}</span>
+                              </div>
+                              <span>{formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}</span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
               </div>
             </>
           )}
