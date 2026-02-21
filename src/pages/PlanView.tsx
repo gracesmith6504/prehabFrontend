@@ -8,8 +8,9 @@ import {
   getCurrentPhase, calculateAcuteChronicRatio, calculateSorenessContribution,
   calculateRiskScore, type PlanSession, type MenstrualPhase,
 } from '@/lib/riskEngine';
-import { ClipboardList, ArrowRight } from 'lucide-react';
+import { ClipboardList, ArrowRight, Calendar, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function PlanView() {
   const { user } = useAuth();
@@ -86,6 +87,29 @@ export default function PlanView() {
     return <AppLayout><div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div></AppLayout>;
   }
 
+  const today = new Date();
+  const todayDay = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][today.getDay()];
+
+  // Build week dates starting from Monday
+  const getWeekDates = () => {
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - ((dayOfWeek + 6) % 7));
+    return ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day, i) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      return { day, date: d };
+    });
+  };
+  const weekDates = getWeekDates();
+
+  const intensityColor = (intensity: string) => {
+    if (intensity === 'High') return 'bg-destructive/20 text-destructive border-destructive/30';
+    if (intensity === 'Medium') return 'bg-warning/20 text-warning border-warning/30';
+    return 'bg-primary/20 text-primary border-primary/30';
+  };
+
   return (
     <AppLayout>
       <div className="max-w-4xl mx-auto space-y-8">
@@ -111,43 +135,96 @@ export default function PlanView() {
           </div>
         )}
 
-        {/* Plan comparison */}
-        <div className="space-y-3">
-          <div className="grid grid-cols-[80px_1fr_40px_1fr] gap-2 text-xs text-muted-foreground uppercase tracking-wider px-4">
-            <span>Day</span>
-            <span>Original</span>
-            <span></span>
-            <span>Adjusted</span>
-          </div>
-          {original.map((o, i) => {
-            const a = adjusted[i];
-            const changed = o.type !== a.type || o.intensity !== a.intensity || o.duration !== a.duration;
-            return (
-              <motion.div
-                key={o.day}
-                className={`grid grid-cols-[80px_1fr_40px_1fr] gap-2 items-center p-4 rounded-lg ${
-                  changed ? 'bg-primary/5 border border-primary/20' : 'glass-card'
-                }`}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.05 }}
-              >
-                <span className="font-heading font-bold text-sm">{o.day.slice(0, 3)}</span>
-                <div className="text-sm">
-                  <span className={changed ? 'line-through text-muted-foreground' : ''}>{o.type}</span>
-                  <span className="text-xs text-muted-foreground ml-2">{o.intensity} • {o.duration}min</span>
-                </div>
-                <div className="flex justify-center">
-                  {changed && <ArrowRight className="h-4 w-4 text-primary" />}
-                </div>
-                <div className="text-sm">
-                  <span className={changed ? 'text-primary font-bold' : ''}>{a.type}</span>
-                  <span className="text-xs text-muted-foreground ml-2">{a.intensity} • {a.duration}min</span>
-                </div>
-              </motion.div>
-            );
-          })}
-        </div>
+        <Tabs defaultValue="calendar" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="calendar" className="gap-2"><Calendar className="h-4 w-4" /> Calendar View</TabsTrigger>
+            <TabsTrigger value="comparison" className="gap-2"><ArrowRight className="h-4 w-4" /> Comparison View</TabsTrigger>
+          </TabsList>
+
+          {/* Calendar View */}
+          <TabsContent value="calendar" className="mt-4">
+            <div className="grid grid-cols-7 gap-2">
+              {weekDates.map(({ day, date }) => {
+                const session = adjusted.find(s => s.day === day);
+                const isToday = day === todayDay;
+                const orig = original.find(s => s.day === day);
+                const changed = orig && session && (orig.type !== session.type || orig.intensity !== session.intensity || orig.duration !== session.duration);
+                return (
+                  <motion.div
+                    key={day}
+                    className={`rounded-xl border p-3 flex flex-col gap-2 min-h-[140px] ${
+                      isToday ? 'border-primary bg-primary/5 ring-2 ring-primary/20' : 'border-border bg-card'
+                    }`}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: weekDates.indexOf(weekDates.find(w => w.day === day)!) * 0.04 }}
+                  >
+                    <div className="text-center">
+                      <p className={`text-xs font-bold uppercase ${isToday ? 'text-primary' : 'text-muted-foreground'}`}>
+                        {day.slice(0, 3)}
+                      </p>
+                      <p className={`text-lg font-heading font-bold ${isToday ? 'text-primary' : ''}`}>
+                        {date.getDate()}
+                      </p>
+                    </div>
+                    {session && (
+                      <div className="flex-1 flex flex-col gap-1.5">
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full text-center border ${intensityColor(session.intensity)}`}>
+                          {session.intensity}
+                        </span>
+                        <p className={`text-xs font-medium text-center ${changed ? 'text-primary' : ''}`}>
+                          {session.type}
+                        </p>
+                        <p className="text-xs text-muted-foreground text-center">{session.duration}min</p>
+                        {changed && (
+                          <p className="text-[10px] text-primary text-center font-medium">AI adjusted</p>
+                        )}
+                      </div>
+                    )}
+                  </motion.div>
+                );
+              })}
+            </div>
+          </TabsContent>
+
+          {/* Comparison View */}
+          <TabsContent value="comparison" className="mt-4 space-y-3">
+            <div className="grid grid-cols-[80px_1fr_40px_1fr] gap-2 text-xs text-muted-foreground uppercase tracking-wider px-4">
+              <span>Day</span>
+              <span>Original</span>
+              <span></span>
+              <span>Adjusted</span>
+            </div>
+            {original.map((o, i) => {
+              const a = adjusted[i];
+              const changed = o.type !== a.type || o.intensity !== a.intensity || o.duration !== a.duration;
+              return (
+                <motion.div
+                  key={o.day}
+                  className={`grid grid-cols-[80px_1fr_40px_1fr] gap-2 items-center p-4 rounded-lg ${
+                    changed ? 'bg-primary/5 border border-primary/20' : 'glass-card'
+                  }`}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                >
+                  <span className="font-heading font-bold text-sm">{o.day.slice(0, 3)}</span>
+                  <div className="text-sm">
+                    <span className={changed ? 'line-through text-muted-foreground' : ''}>{o.type}</span>
+                    <span className="text-xs text-muted-foreground ml-2">{o.intensity} • {o.duration}min</span>
+                  </div>
+                  <div className="flex justify-center">
+                    {changed && <ArrowRight className="h-4 w-4 text-primary" />}
+                  </div>
+                  <div className="text-sm">
+                    <span className={changed ? 'text-primary font-bold' : ''}>{a.type}</span>
+                    <span className="text-xs text-muted-foreground ml-2">{a.intensity} • {a.duration}min</span>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </TabsContent>
+        </Tabs>
 
         {/* Explanation */}
         <div className="glass-card p-6">

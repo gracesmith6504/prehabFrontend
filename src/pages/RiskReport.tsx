@@ -11,7 +11,7 @@ import {
   generateExplanation, adjustPlan, generateDefaultPlan,
   type MenstrualPhase,
 } from '@/lib/riskEngine';
-import { BarChart3, AlertTriangle, Send } from 'lucide-react';
+import { BarChart3, AlertTriangle, Send, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function RiskReport() {
@@ -25,6 +25,7 @@ export default function RiskReport() {
   const [explanation, setExplanation] = useState('');
   const [escalated, setEscalated] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [previousScore, setPreviousScore] = useState<number | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -54,9 +55,20 @@ export default function RiskReport() {
       const { changes } = adjustPlan(plan, risk.score);
       setExplanation(generateExplanation(currentPhase, risk.score, ratio, sc, changes));
 
-      // Check existing escalation
-      const { data: latestReport } = await supabase.from('risk_reports').select('escalation_status').eq('athlete_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
-      if (latestReport?.escalation_status === 'escalated') setEscalated(true);
+      // Check existing escalation & previous score
+      const { data: recentReports } = await supabase
+        .from('risk_reports')
+        .select('risk_score, escalation_status, created_at')
+        .eq('athlete_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(2);
+
+      if (recentReports && recentReports.length > 0) {
+        if (recentReports[0].escalation_status === 'escalated') setEscalated(true);
+        if (recentReports.length > 1) {
+          setPreviousScore(recentReports[1].risk_score);
+        }
+      }
 
       setLoading(false);
     };
@@ -108,6 +120,19 @@ export default function RiskReport() {
           <RiskGauge score={riskScore} />
           <div className="mt-4"><RiskBadge level={riskLevel} /></div>
           <p className="text-lg font-heading font-bold mt-3">Final Injury Risk Score: {riskScore}/100</p>
+          {previousScore !== null && (
+            <div className={`flex items-center gap-1.5 mt-2 text-sm font-medium ${
+              riskScore > previousScore ? 'text-destructive' : riskScore < previousScore ? 'text-primary' : 'text-muted-foreground'
+            }`}>
+              {riskScore > previousScore ? (
+                <><TrendingUp className="h-4 w-4" /> ↑ +{riskScore - previousScore} from previous</>
+              ) : riskScore < previousScore ? (
+                <><TrendingDown className="h-4 w-4" /> ↓ {riskScore - previousScore} from previous</>
+              ) : (
+                <><Minus className="h-4 w-4" /> No change from previous</>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Breakdown */}
