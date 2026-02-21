@@ -14,7 +14,7 @@ import {
   PHASE_MULTIPLIERS,
   type MenstrualPhase,
 } from '@/lib/riskEngine';
-import { Calendar, Dumbbell, HeartPulse, ClipboardList, BarChart3, AlertTriangle } from 'lucide-react';
+import { Calendar, Dumbbell, HeartPulse, ClipboardList, BarChart3, AlertTriangle, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 export default function Dashboard() {
   const { user, profile } = useAuth();
@@ -23,6 +23,7 @@ export default function Dashboard() {
   const [phase, setPhase] = useState<MenstrualPhase>('unknown');
   const [acRatio, setAcRatio] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [previousScore, setPreviousScore] = useState<number | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -64,6 +65,19 @@ export default function Dashboard() {
       const risk = calculateRiskScore(currentPhase, ratio, sorenessContrib);
       setRiskScore(risk.score);
       setRiskLevel(risk.level);
+
+      // Fetch previous risk report for trend
+      const { data: prevReports } = await supabase
+        .from('risk_reports')
+        .select('risk_score')
+        .eq('athlete_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (prevReports) {
+        setPreviousScore(prevReports.risk_score);
+      }
+
       setLoading(false);
     };
 
@@ -117,6 +131,19 @@ export default function Dashboard() {
             <div className="mt-3">
               <RiskBadge level={riskLevel} />
             </div>
+            {previousScore !== null && (
+              <div className={`flex items-center gap-1 mt-2 text-xs font-medium ${
+                riskScore > previousScore ? 'text-destructive' : riskScore < previousScore ? 'text-primary' : 'text-muted-foreground'
+              }`}>
+                {riskScore > previousScore ? (
+                  <><TrendingUp className="h-3.5 w-3.5" /> +{riskScore - previousScore} from last</>
+                ) : riskScore < previousScore ? (
+                  <><TrendingDown className="h-3.5 w-3.5" /> {riskScore - previousScore} from last</>
+                ) : (
+                  <><Minus className="h-3.5 w-3.5" /> No change</>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="glass-card p-6">

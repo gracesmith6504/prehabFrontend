@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend } from 'recharts';
 import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 
 interface AthleteInfo {
   user_id: string;
@@ -111,6 +113,10 @@ export default function CoachDashboard() {
   const [athletes, setAthletes] = useState<AthleteInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedAthlete, setSelectedAthlete] = useState<AthleteInfo | null>(null);
+  const [noteDialogOpen, setNoteDialogOpen] = useState(false);
+  const [noteTarget, setNoteTarget] = useState<AthleteInfo | null>(null);
+  const [noteText, setNoteText] = useState('');
+  const [coachNotes, setCoachNotes] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     if (!user) return;
@@ -301,7 +307,11 @@ export default function CoachDashboard() {
                         size="sm"
                         variant="secondary"
                         className="gap-1.5"
-                        onClick={() => toast.info(`Coach note added for ${a.full_name || a.email}`)}
+                        onClick={() => {
+                          setNoteTarget(a);
+                          setNoteText('');
+                          setNoteDialogOpen(true);
+                        }}
                       >
                         <StickyNote className="h-3.5 w-3.5" />
                         Add Coach Note
@@ -406,6 +416,42 @@ export default function CoachDashboard() {
           </div>
         )}
       </div>
+
+      {/* Coach Note Dialog */}
+      <Dialog open={noteDialogOpen} onOpenChange={setNoteDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Coach Note — {noteTarget?.full_name || noteTarget?.email}</DialogTitle>
+          </DialogHeader>
+          <Textarea
+            placeholder="Write your note here..."
+            value={noteText}
+            onChange={e => setNoteText(e.target.value)}
+            className="min-h-[120px]"
+          />
+          {coachNotes[noteTarget?.user_id || '']?.length > 0 && (
+            <div className="space-y-2 max-h-40 overflow-y-auto">
+              <p className="text-xs text-muted-foreground font-bold uppercase">Previous Notes</p>
+              {coachNotes[noteTarget?.user_id || ''].map((n, i) => (
+                <p key={i} className="text-sm bg-secondary/50 rounded p-2">{n}</p>
+              ))}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNoteDialogOpen(false)}>Cancel</Button>
+            <Button onClick={() => {
+              if (!noteText.trim() || !noteTarget) return;
+              setCoachNotes(prev => ({
+                ...prev,
+                [noteTarget.user_id]: [...(prev[noteTarget.user_id] || []), noteText.trim()],
+              }));
+              toast.success(`Note saved for ${noteTarget.full_name || noteTarget.email}`);
+              setNoteDialogOpen(false);
+              setNoteText('');
+            }}>Save Note</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
