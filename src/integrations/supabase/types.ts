@@ -168,6 +168,33 @@ export type Database = {
           },
         ]
       }
+      coach_plan_templates: {
+        Row: {
+          coach_id: string
+          created_at: string
+          id: string
+          name: string
+          sessions: Json
+          updated_at: string
+        }
+        Insert: {
+          coach_id: string
+          created_at?: string
+          id?: string
+          name: string
+          sessions?: Json
+          updated_at?: string
+        }
+        Update: {
+          coach_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+          sessions?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       escalations: {
         Row: {
           acknowledged_at: string | null
@@ -556,6 +583,7 @@ export type Database = {
           locked_by: string | null
           locked_by_coach: boolean | null
           original_plan: Json
+          plan_owner_type: string
           risk_level: string | null
           risk_score: number | null
         }
@@ -571,6 +599,7 @@ export type Database = {
           locked_by?: string | null
           locked_by_coach?: boolean | null
           original_plan?: Json
+          plan_owner_type?: string
           risk_level?: string | null
           risk_score?: number | null
         }
@@ -586,6 +615,7 @@ export type Database = {
           locked_by?: string | null
           locked_by_coach?: boolean | null
           original_plan?: Json
+          plan_owner_type?: string
           risk_level?: string | null
           risk_score?: number | null
         }
