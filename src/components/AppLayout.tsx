@@ -2,9 +2,13 @@ import { ReactNode } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { motion } from 'framer-motion';
-import { Activity, User, LogOut, BarChart3, Calendar, Dumbbell, HeartPulse, ClipboardList, Shield, History } from 'lucide-react';
+import {
+  Activity, LogOut, BarChart3, Calendar, Dumbbell, HeartPulse,
+  ClipboardList, History, LayoutDashboard, AlertTriangle,
+  TrendingUp, FileText, Settings,
+} from 'lucide-react';
 
-const navItems = [
+const athleteNav = [
   { path: '/dashboard', label: 'Dashboard', icon: Activity },
   { path: '/cycle-setup', label: 'Cycle', icon: Calendar },
   { path: '/training-log', label: 'Training', icon: Dumbbell },
@@ -12,6 +16,15 @@ const navItems = [
   { path: '/soreness-log', label: 'Soreness', icon: HeartPulse },
   { path: '/plan', label: 'Plan', icon: ClipboardList },
   { path: '/risk-report', label: 'Risk', icon: BarChart3 },
+];
+
+const coachNav = [
+  { path: '/coach', label: 'Squad Overview', icon: LayoutDashboard },
+  { path: '/coach/escalations', label: 'Escalations', icon: AlertTriangle },
+  { path: '/coach/analytics', label: 'Analytics', icon: TrendingUp },
+  { path: '/coach/plans', label: 'Plans', icon: ClipboardList },
+  { path: '/coach/reports', label: 'Reports', icon: FileText },
+  { path: '/coach/settings', label: 'Settings', icon: Settings },
 ];
 
 export default function AppLayout({ children }: { children: ReactNode }) {
@@ -24,15 +37,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     navigate('/');
   };
 
-  const items = profile?.role === 'coach' 
-    ? [{ path: '/coach', label: 'Athletes', icon: Shield }, ...navItems.slice(0, 1)]
-    : navItems;
+  const items = profile?.role === 'coach' ? coachNav : athleteNav;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Top bar */}
       <header className="border-b border-border px-4 py-3 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-2">
+        <Link to={profile?.role === 'coach' ? '/coach' : '/dashboard'} className="flex items-center gap-2">
           <Activity className="h-6 w-6 text-primary" />
           <span className="font-heading text-lg font-bold uppercase tracking-wider">CycleAgent</span>
         </Link>
@@ -45,7 +55,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Side nav - desktop */}
         <nav className="hidden md:flex flex-col w-56 border-r border-border p-4 gap-1">
           {items.map(item => {
             const active = location.pathname === item.path;
@@ -54,8 +63,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 key={item.path}
                 to={item.path}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  active 
-                    ? 'bg-primary/10 text-primary neon-border' 
+                  active
+                    ? 'bg-primary/10 text-primary neon-border'
                     : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
                 }`}
               >
@@ -66,7 +75,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           })}
         </nav>
 
-        {/* Content */}
         <main className="flex-1 overflow-y-auto p-4 md:p-8">
           <motion.div
             key={location.pathname}
@@ -79,7 +87,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </main>
       </div>
 
-      {/* Bottom nav - mobile */}
       <nav className="md:hidden border-t border-border flex justify-around py-2 bg-background">
         {items.slice(0, 5).map(item => {
           const active = location.pathname === item.path;

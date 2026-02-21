@@ -13,23 +13,50 @@ import SorenessLog from "./pages/SorenessLog";
 import PlanView from "./pages/PlanView";
 import RiskReport from "./pages/RiskReport";
 import CoachDashboard from "./pages/CoachDashboard";
+import CoachEscalations from "./pages/coach/CoachEscalations";
+import CoachAnalytics from "./pages/coach/CoachAnalytics";
+import CoachPlans from "./pages/coach/CoachPlans";
+import CoachReports from "./pages/coach/CoachReports";
+import CoachSettings from "./pages/coach/CoachSettings";
 import TrainingHistory from "./pages/TrainingHistory";
 import NotFound from "./pages/NotFound";
 import { ReactNode } from "react";
 
 const queryClient = new QueryClient();
 
-function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { user, loading } = useAuth();
-  if (loading) return <div className="min-h-screen bg-background flex items-center justify-center"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
+function LoadingSpinner() {
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
+
+function AthleteRoute({ children }: { children: ReactNode }) {
+  const { user, loading, profile } = useAuth();
+  if (loading) return <LoadingSpinner />;
   if (!user) return <Navigate to="/auth?mode=login" replace />;
+  if (!profile) return <LoadingSpinner />;
+  if (profile.role !== 'athlete') return <Navigate to="/coach" replace />;
+  return <>{children}</>;
+}
+
+function CoachRoute({ children }: { children: ReactNode }) {
+  const { user, loading, profile } = useAuth();
+  if (loading) return <LoadingSpinner />;
+  if (!user) return <Navigate to="/auth?mode=login" replace />;
+  if (!profile) return <LoadingSpinner />;
+  if (profile.role !== 'coach') return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
 }
 
 function PublicRoute({ children }: { children: ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, loading, profile } = useAuth();
   if (loading) return null;
-  if (user) return <Navigate to="/dashboard" replace />;
+  if (user) {
+    if (profile?.role === 'coach') return <Navigate to="/coach" replace />;
+    return <Navigate to="/dashboard" replace />;
+  }
   return <>{children}</>;
 }
 
@@ -43,14 +70,21 @@ const App = () => (
           <Routes>
             <Route path="/" element={<PublicRoute><Home /></PublicRoute>} />
             <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
-            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-            <Route path="/cycle-setup" element={<ProtectedRoute><CycleSetup /></ProtectedRoute>} />
-            <Route path="/training-log" element={<ProtectedRoute><TrainingLog /></ProtectedRoute>} />
-            <Route path="/soreness-log" element={<ProtectedRoute><SorenessLog /></ProtectedRoute>} />
-            <Route path="/plan" element={<ProtectedRoute><PlanView /></ProtectedRoute>} />
-            <Route path="/risk-report" element={<ProtectedRoute><RiskReport /></ProtectedRoute>} />
-            <Route path="/coach" element={<ProtectedRoute><CoachDashboard /></ProtectedRoute>} />
-            <Route path="/training-history" element={<ProtectedRoute><TrainingHistory /></ProtectedRoute>} />
+            {/* Athlete routes */}
+            <Route path="/dashboard" element={<AthleteRoute><Dashboard /></AthleteRoute>} />
+            <Route path="/cycle-setup" element={<AthleteRoute><CycleSetup /></AthleteRoute>} />
+            <Route path="/training-log" element={<AthleteRoute><TrainingLog /></AthleteRoute>} />
+            <Route path="/training-history" element={<AthleteRoute><TrainingHistory /></AthleteRoute>} />
+            <Route path="/soreness-log" element={<AthleteRoute><SorenessLog /></AthleteRoute>} />
+            <Route path="/plan" element={<AthleteRoute><PlanView /></AthleteRoute>} />
+            <Route path="/risk-report" element={<AthleteRoute><RiskReport /></AthleteRoute>} />
+            {/* Coach routes */}
+            <Route path="/coach" element={<CoachRoute><CoachDashboard /></CoachRoute>} />
+            <Route path="/coach/escalations" element={<CoachRoute><CoachEscalations /></CoachRoute>} />
+            <Route path="/coach/analytics" element={<CoachRoute><CoachAnalytics /></CoachRoute>} />
+            <Route path="/coach/plans" element={<CoachRoute><CoachPlans /></CoachRoute>} />
+            <Route path="/coach/reports" element={<CoachRoute><CoachReports /></CoachRoute>} />
+            <Route path="/coach/settings" element={<CoachRoute><CoachSettings /></CoachRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
