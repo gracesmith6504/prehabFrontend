@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import AppLayout from '@/components/AppLayout';
 import { useToast } from '@/hooks/use-toast';
 import { HeartPulse, Plus } from 'lucide-react';
 
-const BODY_PARTS = ['knee', 'hamstring', 'groin', 'calf'] as const;
+const DEFAULT_PARTS = ['knee', 'hamstring', 'groin', 'calf'] as const;
 
 export default function SorenessLog() {
   const { user } = useAuth();
@@ -13,30 +13,84 @@ export default function SorenessLog() {
   const [values, setValues] = useState<Record<string, number>>({
     knee: 0, hamstring: 0, groin: 0, calf: 0,
   });
-  const [otherLabel, setOtherLabel] = useState('');
-  const [otherValue, setOtherValue] = useState(0);
-  const [showOther, setShowOther] = useState(false);
+  const [customParts, setCustomParts] = useState<string[]>([]);
+  const [newPartLabel, setNewPartLabel] = useState('');
+  const [showAddNew, setShowAddNew] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Load previously used custom body parts from past logs
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('soreness_logs')
+      .select('other_label')
+      .eq('athlete_id', user.id)
+      .not('other_label', 'is', null)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (data) {
+          const unique = [...new Set(data.map(d => d.other_label).filter(Boolean))] as string[];
+          setCustomParts(unique);
+          const init: Record<string, number> = {};
+          unique.forEach(p => { init[p] = 0; });
+          setValues(v => ({ ...v, ...init }));
+        }
+      });
+  }, [user]);
+
+  const addCustomPart = () => {
+    const label = newPartLabel.trim().toLowerCase();
+    if (!label) return;
+    if ([...DEFAULT_PARTS, ...customParts].includes(label)) {
+      toast({ title: 'Already exists', variant: 'destructive' });
+      return;
+    }
+    setCustomParts(prev => [...prev, label]);
+    setValues(v => ({ ...v, [label]: 0 }));
+    setNewPartLabel('');
+    setShowAddNew(false);
+  };
 
   const handleSave = async () => {
     if (!user) return;
     setSaving(true);
-    const { error } = await supabase.from('soreness_logs').insert({
+
+    // Save default body parts log
+    const baseLog = {
       athlete_id: user.id,
       date: new Date().toISOString().split('T')[0],
       knee: values.knee,
       hamstring: values.hamstring,
       groin: values.groin,
       calf: values.calf,
-      other_label: showOther ? otherLabel : null,
-      other_value: showOther ? otherValue : 0,
-    });
+      other_label: null as string | null,
+      other_value: 0,
+    };
 
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    if (customParts.length === 0) {
+      const { error } = await supabase.from('soreness_logs').insert(baseLog);
+      if (error) {
+        toast({ title: 'Error', description: error.message, variant: 'destructive' });
+        setSaving(false);
+        return;
+      }
     } else {
-      toast({ title: 'Soreness logged!' });
+      // Insert one row per custom part so all are persisted
+      const rows = customParts.map(part => ({
+        ...baseLog,
+        other_label: part,
+        other_value: values[part] ?? 0,
+      }));
+      // If no custom parts have values, still save at least the base
+      const { error } = await supabase.from('soreness_logs').insert(rows);
+      if (error) {
+        toast({ title: 'Error', description: error.message, variant: 'destructive' });
+        setSaving(false);
+        return;
+      }
     }
+
+    toast({ title: 'Soreness logged!' });
     setSaving(false);
   };
 
@@ -45,6 +99,8 @@ export default function SorenessLog() {
     if (v >= 4) return 'text-warning';
     return 'text-primary';
   };
+
+  const allParts = [...DEFAULT_PARTS, ...customParts];
 
   return (
     <AppLayout>
@@ -58,14 +114,14 @@ export default function SorenessLog() {
         </div>
 
         <div className="glass-card p-6 space-y-6">
-          {BODY_PARTS.map(part => (
+          {allParts.map(part => (
             <div key={part}>
               <div className="flex justify-between items-center mb-2">
                 <label className="text-sm font-medium capitalize">{part}</label>
-                <span className={`text-2xl font-heading font-bold ${getColor(values[part])}`}>{values[part]}</span>
+                <span className={`text-2xl font-heading font-bold ${getColor(values[part] ?? 0)}`}>{values[part] ?? 0}</span>
               </div>
               <input
-                type="range" min={0} max={10} value={values[part]}
+                type="range" min={0} max={10} value={values[part] ?? 0}
                 onChange={e => setValues(v => ({ ...v, [part]: Number(e.target.value) }))}
                 className="w-full accent-primary"
               />
@@ -75,22 +131,32 @@ export default function SorenessLog() {
             </div>
           ))}
 
-          {showOther ? (
-            <div className="space-y-3 border-t border-border pt-4">
+          {showAddNew ? (
+            <div className="flex gap-2 border-t border-border pt-4">
               <input
-                type="text" placeholder="Body part name" value={otherLabel}
-                onChange={e => setOtherLabel(e.target.value)}
-                className="w-full px-4 py-2 bg-secondary rounded-lg border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                type="text"
+                placeholder="Body part name"
+                value={newPartLabel}
+                onChange={e => setNewPartLabel(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addCustomPart()}
+                className="flex-1 px-4 py-2 bg-secondary rounded-lg border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                autoFocus
               />
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium capitalize">{otherLabel || 'Other'}</span>
-                <span className={`text-2xl font-heading font-bold ${getColor(otherValue)}`}>{otherValue}</span>
-              </div>
-              <input type="range" min={0} max={10} value={otherValue}
-                onChange={e => setOtherValue(Number(e.target.value))} className="w-full accent-primary" />
+              <button
+                onClick={addCustomPart}
+                className="px-4 py-2 bg-primary text-primary-foreground text-sm font-bold rounded-lg hover:brightness-110 transition-all"
+              >
+                Add
+              </button>
+              <button
+                onClick={() => { setShowAddNew(false); setNewPartLabel(''); }}
+                className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
+              >
+                Cancel
+              </button>
             </div>
           ) : (
-            <button onClick={() => setShowOther(true)}
+            <button onClick={() => setShowAddNew(true)}
               className="flex items-center gap-2 text-sm text-primary font-medium hover:underline">
               <Plus className="h-4 w-4" /> Add another body part
             </button>
