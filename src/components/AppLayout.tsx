@@ -63,7 +63,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 to={item.path}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                   active
-                    ? 'bg-primary/10 text-primary neon-border'
+                    ? 'bg-primary text-primary-foreground'
                     : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
                 }`}
               >
