@@ -2,16 +2,12 @@ import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import AppLayout from '@/components/AppLayout';
-import AgentStatus from '@/components/AgentStatus';
-import EscalationCard from '@/components/EscalationCard';
+import LastEvaluatedLine from '@/components/coach/LastEvaluatedLine';
 import SquadRiskSnapshot from '@/components/coach/SquadRiskSnapshot';
-
 import AthleteTable, { type AthleteRow } from '@/components/coach/AthleteTable';
 import SquadRiskTrendChart from '@/components/coach/SquadRiskTrendChart';
 import CoachAthleteDetail from '@/components/coach/CoachAthleteDetail';
-import { Shield, Play, Flame, Users } from 'lucide-react';
-import { motion } from 'framer-motion';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Shield, Play, Users, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
@@ -21,8 +17,6 @@ interface EscalationRow {
   trigger_reason: string;
   status: string;
   created_at: string;
-  notes: string | null;
-  risk_prediction_id: string | null;
 }
 
 export default function CoachDashboard() {
@@ -33,7 +27,6 @@ export default function CoachDashboard() {
   const [runningAgent, setRunningAgent] = useState(false);
   const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null);
   const [prevAvgRisk, setPrevAvgRisk] = useState<number | null>(null);
-  const escalationRef = useRef<HTMLDivElement>(null);
 
   const loadData = async () => {
     if (!user) return;
@@ -77,7 +70,7 @@ export default function CoachDashboard() {
       }
     }
 
-    // If no real athletes, use mock data
+    // Mock data if no real athletes
     if (!rows.length) {
       rows.push(
         { user_id: 'mock-1', email: 'sarah.jones@team.com', full_name: 'Sarah Jones', risk_score: 82, risk_level: 'High', phase: 'ovulatory', acr: 1.6, max_soreness: 7, escalation_status: 'open', last_agent_run: new Date().toISOString() },
@@ -89,7 +82,7 @@ export default function CoachDashboard() {
       );
     }
 
-    // Get yesterday's avg for trend
+    // Yesterday's avg for trend
     const yesterday = new Date(Date.now() - 86400000).toISOString();
     const twoDaysAgo = new Date(Date.now() - 2 * 86400000).toISOString();
     if (athleteIds.length) {
@@ -104,13 +97,23 @@ export default function CoachDashboard() {
       }
     }
 
+    // Deduplicate escalations by athlete_id (keep latest)
     const { data: escData } = await supabase
       .from('escalations')
-      .select('id, athlete_id, trigger_reason, status, created_at, notes, risk_prediction_id')
+      .select('id, athlete_id, trigger_reason, status, created_at')
       .in('status', ['open', 'acknowledged'])
       .order('created_at', { ascending: false });
 
-    setEscalations((escData || []) as EscalationRow[]);
+    const seen = new Set<string>();
+    const deduped: EscalationRow[] = [];
+    for (const esc of (escData || []) as EscalationRow[]) {
+      if (!seen.has(esc.athlete_id)) {
+        seen.add(esc.athlete_id);
+        deduped.push(esc);
+      }
+    }
+
+    setEscalations(deduped);
     setAthletes(rows.sort((a, b) => b.risk_score - a.risk_score));
     setLoading(false);
   };
@@ -135,12 +138,11 @@ export default function CoachDashboard() {
 
   const highCount = athletes.filter(a => a.risk_level === 'High').length;
   const mediumCount = athletes.filter(a => a.risk_level === 'Medium').length;
-  const lowCount = athletes.filter(a => a.risk_level === 'Low').length;
   const avgScore = athletes.length ? Math.round(athletes.reduce((s, a) => s + a.risk_score, 0) / athletes.length) : 0;
 
   const enrichedEscalations = escalations.map(esc => {
     const athlete = athletes.find(a => a.user_id === esc.athlete_id);
-    return { ...esc, athlete_name: athlete?.full_name || undefined, athlete_email: athlete?.email, risk_score: athlete?.risk_score };
+    return { ...esc, athlete_name: athlete?.full_name || athlete?.email || 'Unknown', risk_score: athlete?.risk_score ?? 0 };
   });
 
   const selectedAthlete = selectedAthleteId ? athletes.find(a => a.user_id === selectedAthleteId) : null;
@@ -161,83 +163,87 @@ export default function CoachDashboard() {
 
   return (
     <AppLayout>
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-8">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
-          <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-heading font-bold flex items-center gap-2 sm:gap-3">
-              <Shield className="h-6 w-6 sm:h-8 sm:w-8 text-primary shrink-0" />
-              COACH COMMAND CENTER
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-heading font-bold flex items-center gap-3">
+              <Shield className="h-7 w-7 text-primary" />
+              Command Center
             </h1>
-            <p className="text-muted-foreground text-sm mt-1">Women's Soccer — Real-time Squad Intelligence</p>
+            <div className="mt-1.5">
+              <LastEvaluatedLine />
+            </div>
           </div>
-          <Button onClick={handleRunAgent} disabled={runningAgent} className="gap-2 font-heading uppercase tracking-wider w-full sm:w-auto shrink-0">
-            <Play className="h-4 w-4" />
-            {runningAgent ? 'Running...' : 'Run Agent'}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRunAgent}
+            disabled={runningAgent}
+            className="gap-1.5 text-xs font-medium shrink-0"
+          >
+            <Play className="h-3.5 w-3.5" />
+            {runningAgent ? 'Running…' : 'Run Agent'}
           </Button>
         </div>
 
-        {/* Agent Status */}
-        <AgentStatus />
-
-
-        {/* 1. Squad Risk Snapshot */}
+        {/* Squad Snapshot — 4 stat cards */}
         <SquadRiskSnapshot
           avgRisk={avgScore}
           prevAvgRisk={prevAvgRisk}
-          lowCount={lowCount}
-          mediumCount={mediumCount}
           highCount={highCount}
+          mediumCount={mediumCount}
           activeEscalations={enrichedEscalations.length}
-          totalAthletes={athletes.length}
         />
 
-        {/* 2. Escalation Queue */}
-        <div ref={escalationRef}>
-          {enrichedEscalations.length > 0 ? (
-            <Card className="border-destructive/40 bg-destructive/5">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg font-heading flex items-center gap-2 text-destructive">
-                  <Flame className="h-5 w-5" />
-                  Escalation Queue ({enrichedEscalations.length})
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {enrichedEscalations.map(esc => (
-                  <EscalationCard key={esc.id} escalation={esc} onUpdate={loadData} />
-                ))}
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="border-primary/20">
-              <CardContent className="py-6 text-center">
-                <p className="text-sm text-muted-foreground">No active escalations — squad looking good ✓</p>
-              </CardContent>
-            </Card>
-          )}
-        </div>
+        {/* Escalation Queue — simplified */}
+        {enrichedEscalations.length > 0 && (
+          <div className="space-y-2">
+            <h2 className="text-sm font-heading font-bold uppercase tracking-wider text-destructive">
+              Escalations ({enrichedEscalations.length})
+            </h2>
+            <div className="rounded-xl border border-destructive/20 bg-card divide-y divide-border">
+              {enrichedEscalations.map(esc => (
+                <div key={esc.id} className="flex items-center justify-between px-4 py-3 gap-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-sm font-bold text-destructive tabular-nums w-8">{esc.risk_score}</span>
+                    <span className="text-sm font-medium truncate">{esc.athlete_name}</span>
+                    <span className="text-xs text-muted-foreground truncate hidden sm:inline">{esc.trigger_reason}</span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1 text-xs shrink-0"
+                    onClick={() => setSelectedAthleteId(esc.athlete_id)}
+                  >
+                    <Eye className="h-3.5 w-3.5" /> View
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
-        {/* 3. Squad Risk Trend Chart */}
+        {/* Squad Risk Trend — full width, prioritized */}
         <SquadRiskTrendChart athleteIds={athletes.map(a => a.user_id)} />
 
-        {/* 4. Athlete Table */}
+        {/* Squad Roster */}
         {loading ? (
           <div className="flex items-center justify-center h-32">
             <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           </div>
-        ) : athletes.length === 0 ? (
-          <div className="glass-card p-8 text-center">
-            <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-lg font-medium mb-2">No athletes assigned</p>
-            <p className="text-sm text-muted-foreground">Athletes will appear here once they add you as their coach.</p>
-          </div>
-        ) : (
+        ) : athletes.length > 0 ? (
           <div className="space-y-3">
-            <h2 className="text-lg font-heading font-bold flex items-center gap-2">
-              <Users className="h-5 w-5 text-primary" />
+            <h2 className="text-sm font-heading font-bold uppercase tracking-wider flex items-center gap-2">
+              <Users className="h-4 w-4 text-primary" />
               Squad Roster ({athletes.length})
             </h2>
             <AthleteTable athletes={athletes} onSelectAthlete={setSelectedAthleteId} />
+          </div>
+        ) : (
+          <div className="rounded-xl border border-border bg-card p-8 text-center">
+            <Users className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground">No athletes assigned yet.</p>
           </div>
         )}
       </div>
