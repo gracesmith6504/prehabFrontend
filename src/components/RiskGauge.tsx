@@ -1,9 +1,12 @@
 import { motion } from 'framer-motion';
 
 export default function RiskGauge({ score }: { score: number }) {
-  const color = score > 80 ? 'hsl(0, 72%, 51%)' : score > 60 ? 'hsl(45, 93%, 47%)' : 'hsl(110, 100%, 55%)';
+  const isHigh = score > 80;
+  const isMedium = score > 60;
+  const color = isHigh ? 'hsl(0, 72%, 51%)' : isMedium ? 'hsl(45, 93%, 47%)' : 'hsl(145, 65%, 42%)';
   const circumference = 2 * Math.PI * 54;
   const offset = circumference - (score / 100) * circumference;
+  const glowFilter = isHigh ? `drop-shadow(0 0 4px hsl(0 72% 51% / 0.35))` : 'none';
 
   return (
     <div className="relative w-28 h-28 mx-auto">
@@ -19,7 +22,7 @@ export default function RiskGauge({ score }: { score: number }) {
           initial={{ strokeDashoffset: circumference }}
           animate={{ strokeDashoffset: offset }}
           transition={{ duration: 1, ease: 'easeOut' }}
-          style={{ filter: `drop-shadow(0 0 6px ${color})` }}
+          style={{ filter: glowFilter }}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
