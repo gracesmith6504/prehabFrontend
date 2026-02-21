@@ -133,9 +133,9 @@ export default function CoachDashboard() {
     }
   };
 
-  const highCount = athletes.filter(a => a.risk_score >= 75).length;
-  const mediumCount = athletes.filter(a => a.risk_score >= 50 && a.risk_score < 75).length;
-  const lowCount = athletes.filter(a => a.risk_score < 50).length;
+  const highCount = athletes.filter(a => a.risk_level === 'High').length;
+  const mediumCount = athletes.filter(a => a.risk_level === 'Medium').length;
+  const lowCount = athletes.filter(a => a.risk_level === 'Low').length;
   const avgScore = athletes.length ? Math.round(athletes.reduce((s, a) => s + a.risk_score, 0) / athletes.length) : 0;
 
   const enrichedEscalations = escalations.map(esc => {
