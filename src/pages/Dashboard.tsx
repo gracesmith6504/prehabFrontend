@@ -19,8 +19,10 @@ import {
   type MenstrualPhase,
   type PlanSession,
 } from '@/lib/riskEngine';
-import { Calendar, ClipboardList, BarChart3, AlertTriangle, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Calendar, ClipboardList, BarChart3, AlertTriangle, TrendingUp, TrendingDown, Minus, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 export default function Dashboard() {
   const { user, profile } = useAuth();
@@ -30,6 +32,7 @@ export default function Dashboard() {
   const [acRatio, setAcRatio] = useState(0);
   const [loading, setLoading] = useState(true);
   const [previousScore, setPreviousScore] = useState<number | null>(null);
+  const [reEvaluating, setReEvaluating] = useState(false);
 
   // Today's session
   const [todaySession, setTodaySession] = useState<PlanSession | null>(null);
@@ -144,11 +147,38 @@ export default function Dashboard() {
     <AppLayout>
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Greeting */}
-        <div>
-          <h1 className="text-3xl font-heading font-bold">
-            WELCOME{profile?.full_name ? `, ${profile.full_name.toUpperCase()}` : ''}
-          </h1>
-          <p className="text-muted-foreground mt-1">Here's your training snapshot for today.</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-heading font-bold">
+              WELCOME{profile?.full_name ? `, ${profile.full_name.toUpperCase()}` : ''}
+            </h1>
+            <p className="text-muted-foreground mt-1">Here's your training snapshot for today.</p>
+          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                disabled={reEvaluating}
+                onClick={async () => {
+                  setReEvaluating(true);
+                  const { error } = await supabase.functions.invoke('agent-runner', {
+                    body: { trigger_type: 'manual', athlete_id: user?.id },
+                  });
+                  if (error) {
+                    toast.error('Re-evaluation failed');
+                  } else {
+                    toast.success('Risk re-evaluated');
+                    // Reload data
+                    window.location.reload();
+                  }
+                  setReEvaluating(false);
+                }}
+                className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-secondary/50 transition-colors"
+              >
+                <RefreshCw className={`h-4 w-4 ${reEvaluating ? 'animate-spin' : ''}`} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Re-evaluate</TooltipContent>
+          </Tooltip>
         </div>
 
         {/* High risk alert */}
