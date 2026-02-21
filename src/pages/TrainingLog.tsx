@@ -3,9 +3,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import AppLayout from '@/components/AppLayout';
 import { useToast } from '@/hooks/use-toast';
-import { Dumbbell } from 'lucide-react';
+import { Dumbbell, Plus } from 'lucide-react';
 
-const SESSION_TYPES = ['Strength', 'Plyometrics', 'Sprint', 'Match', 'Recovery'];
+const DEFAULT_SESSION_TYPES = ['Strength', 'Plyometrics', 'Sprint', 'Match', 'Recovery'];
 const INTENSITIES = ['Low', 'Medium', 'High'];
 
 export default function TrainingLog() {
@@ -17,7 +17,25 @@ export default function TrainingLog() {
   const [intensity, setIntensity] = useState('Medium');
   const [rpe, setRpe] = useState(5);
   const [sessionType, setSessionType] = useState('Strength');
+  const [customTypes, setCustomTypes] = useState<string[]>([]);
+  const [newType, setNewType] = useState('');
+  const [showAddType, setShowAddType] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const allTypes = [...DEFAULT_SESSION_TYPES, ...customTypes];
+
+  const addCustomType = () => {
+    const label = newType.trim();
+    if (!label) return;
+    if (allTypes.some(t => t.toLowerCase() === label.toLowerCase())) {
+      toast({ title: 'Already exists', variant: 'destructive' });
+      return;
+    }
+    setCustomTypes(prev => [...prev, label]);
+    setSessionType(label);
+    setNewType('');
+    setShowAddType(false);
+  };
 
   const handleSave = async () => {
     if (!user) return;
@@ -98,7 +116,7 @@ export default function TrainingLog() {
           <div>
             <label className="block text-sm font-medium text-muted-foreground mb-1">Session Type</label>
             <div className="grid grid-cols-3 gap-2">
-              {SESSION_TYPES.map(t => (
+              {allTypes.map(t => (
                 <button key={t} type="button" onClick={() => setSessionType(t)}
                   className={`py-2 rounded-lg text-xs font-bold uppercase ${
                     sessionType === t ? 'bg-primary/20 text-primary neon-border' : 'bg-secondary text-muted-foreground'
@@ -106,6 +124,32 @@ export default function TrainingLog() {
                   {t}
                 </button>
               ))}
+              {showAddType ? (
+                <div className="col-span-3 flex gap-2 mt-1">
+                  <input
+                    type="text"
+                    placeholder="New type name"
+                    value={newType}
+                    onChange={e => setNewType(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addCustomType()}
+                    className="flex-1 px-3 py-2 bg-secondary rounded-lg border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    autoFocus
+                  />
+                  <button onClick={addCustomType}
+                    className="px-3 py-2 bg-primary text-primary-foreground text-xs font-bold rounded-lg hover:brightness-110 transition-all">
+                    Add
+                  </button>
+                  <button onClick={() => { setShowAddType(false); setNewType(''); }}
+                    className="px-2 py-2 text-xs text-muted-foreground hover:text-foreground">
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => setShowAddType(true)}
+                  className="py-2 rounded-lg text-xs font-bold uppercase bg-secondary/50 text-muted-foreground border border-dashed border-border hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-1">
+                  <Plus className="h-3 w-3" /> New
+                </button>
+              )}
             </div>
           </div>
 

@@ -3,7 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import AppLayout from '@/components/AppLayout';
 import { useToast } from '@/hooks/use-toast';
-import { HeartPulse, Plus } from 'lucide-react';
+import { HeartPulse, Plus, Trash2 } from 'lucide-react';
 
 const DEFAULT_PARTS = ['knee', 'hamstring', 'groin', 'calf'] as const;
 
@@ -18,7 +18,6 @@ export default function SorenessLog() {
   const [showAddNew, setShowAddNew] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Load previously used custom body parts from past logs
   useEffect(() => {
     if (!user) return;
     supabase
@@ -51,11 +50,28 @@ export default function SorenessLog() {
     setShowAddNew(false);
   };
 
+  const removeCustomPart = async (part: string) => {
+    if (!user) return;
+    // Remove from DB
+    await supabase
+      .from('soreness_logs')
+      .delete()
+      .eq('athlete_id', user.id)
+      .eq('other_label', part);
+    // Remove from state
+    setCustomParts(prev => prev.filter(p => p !== part));
+    setValues(v => {
+      const next = { ...v };
+      delete next[part];
+      return next;
+    });
+    toast({ title: `Removed "${part}"` });
+  };
+
   const handleSave = async () => {
     if (!user) return;
     setSaving(true);
 
-    // Save default body parts log
     const baseLog = {
       athlete_id: user.id,
       date: new Date().toISOString().split('T')[0],
@@ -75,13 +91,11 @@ export default function SorenessLog() {
         return;
       }
     } else {
-      // Insert one row per custom part so all are persisted
       const rows = customParts.map(part => ({
         ...baseLog,
         other_label: part,
         other_value: values[part] ?? 0,
       }));
-      // If no custom parts have values, still save at least the base
       const { error } = await supabase.from('soreness_logs').insert(rows);
       if (error) {
         toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -118,7 +132,18 @@ export default function SorenessLog() {
             <div key={part}>
               <div className="flex justify-between items-center mb-2">
                 <label className="text-sm font-medium capitalize">{part}</label>
-                <span className={`text-2xl font-heading font-bold ${getColor(values[part] ?? 0)}`}>{values[part] ?? 0}</span>
+                <div className="flex items-center gap-2">
+                  <span className={`text-2xl font-heading font-bold ${getColor(values[part] ?? 0)}`}>{values[part] ?? 0}</span>
+                  {!DEFAULT_PARTS.includes(part as any) && (
+                    <button
+                      onClick={() => removeCustomPart(part)}
+                      className="p-1 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors"
+                      title={`Remove ${part}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
               </div>
               <input
                 type="range" min={0} max={10} value={values[part] ?? 0}
