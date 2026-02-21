@@ -73,8 +73,8 @@ const App = () => (
             {/* Athlete routes */}
             <Route path="/dashboard" element={<AthleteRoute><Dashboard /></AthleteRoute>} />
             <Route path="/cycle-setup" element={<AthleteRoute><CycleSetup /></AthleteRoute>} />
-            <Route path="/training-log" element={<AthleteRoute><TrainingLog /></AthleteRoute>} />
-            <Route path="/training-history" element={<AthleteRoute><TrainingHistory /></AthleteRoute>} />
+            <Route path="/training-log" element={<Navigate to="/plan" replace />} />
+            <Route path="/training-history" element={<Navigate to="/plan" replace />} />
             <Route path="/soreness-log" element={<AthleteRoute><SorenessLog /></AthleteRoute>} />
             <Route path="/plan" element={<AthleteRoute><PlanView /></AthleteRoute>} />
             <Route path="/risk-report" element={<AthleteRoute><RiskReport /></AthleteRoute>} />
