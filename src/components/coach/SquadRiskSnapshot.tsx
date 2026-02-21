@@ -16,12 +16,12 @@ export default function SquadRiskSnapshot({ avgRisk, prevAvgRisk, lowCount, medi
   const trendColor = delta === null ? 'text-muted-foreground' : delta > 0 ? 'text-destructive' : delta < 0 ? 'text-primary' : 'text-muted-foreground';
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
       {/* Avg Risk */}
-      <div className="glass-card p-5 col-span-2 lg:col-span-1 flex flex-col items-center justify-center gap-1">
+      <div className="glass-card p-4 sm:p-5 col-span-2 sm:col-span-3 lg:col-span-1 flex flex-col items-center justify-center gap-1">
         <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Avg Squad Risk</p>
         <div className="flex items-center gap-2">
-          <span className="text-4xl font-heading font-bold">{avgRisk}</span>
+          <span className="text-3xl sm:text-4xl font-heading font-bold">{avgRisk}</span>
           {delta !== null && (
             <div className={`flex items-center gap-0.5 ${trendColor}`}>
               <TrendIcon className="h-4 w-4" />

@@ -145,14 +145,14 @@ export default function Dashboard() {
 
   return (
     <AppLayout>
-      <div className="max-w-4xl mx-auto space-y-6">
+      <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6">
         {/* Greeting */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-heading font-bold">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-heading font-bold truncate">
               WELCOME{profile?.full_name ? `, ${profile.full_name.toUpperCase()}` : ''}
             </h1>
-            <p className="text-muted-foreground mt-1">Here's your training snapshot for today.</p>
+            <p className="text-muted-foreground text-sm mt-1">Here's your training snapshot for today.</p>
           </div>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -209,11 +209,11 @@ export default function Dashboard() {
         )}
 
         {/* Stats Row */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="glass-card p-5 flex flex-col items-center">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+          <div className="glass-card p-4 sm:p-5 flex flex-col items-center">
             <p className="text-xs text-muted-foreground uppercase tracking-wider mb-3">Injury Risk</p>
             {loading ? (
-              <div className="w-28 h-28 rounded-full bg-secondary animate-pulse" />
+              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-secondary animate-pulse" />
             ) : (
               <RiskGauge score={riskScore} />
             )}
@@ -233,17 +233,17 @@ export default function Dashboard() {
             )}
           </div>
 
-          <div className="glass-card p-5">
+          <div className="glass-card p-4 sm:p-5">
             <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Current Phase</p>
-            <p className="text-2xl font-heading font-bold capitalize text-primary">{phase}</p>
+            <p className="text-xl sm:text-2xl font-heading font-bold capitalize text-primary">{phase}</p>
             <p className="text-sm text-muted-foreground mt-1">
               Risk factor: ×{PHASE_MULTIPLIERS[phase].toFixed(1)}
             </p>
           </div>
 
-          <div className="glass-card p-5">
+          <div className="glass-card p-4 sm:p-5">
             <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Training Load</p>
-            <p className={`text-2xl font-heading font-bold ${acRatio > 1.5 ? 'risk-high' : acRatio > 1.2 ? 'risk-medium' : 'risk-low'}`}>
+            <p className={`text-xl sm:text-2xl font-heading font-bold ${acRatio > 1.5 ? 'risk-high' : acRatio > 1.2 ? 'risk-medium' : 'risk-low'}`}>
               {acRatio.toFixed(2)}
             </p>
             <p className="text-sm text-muted-foreground mt-1">
@@ -254,7 +254,7 @@ export default function Dashboard() {
 
         {/* AI Update + Risk Drivers */}
         {user && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <AIUpdateCard lastUpdated={lastAgentUpdate} planAdjusted={planAdjusted} />
             <SimplifiedDrivers athleteId={user.id} />
           </div>
@@ -265,8 +265,8 @@ export default function Dashboard() {
 
         {/* Quick Actions */}
         <div>
-          <h2 className="font-heading text-lg font-bold uppercase mb-3">Quick Actions</h2>
-          <div className="grid grid-cols-3 gap-3">
+          <h2 className="font-heading text-base sm:text-lg font-bold uppercase mb-3">Quick Actions</h2>
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
             {quickActions.map(a => (
               <Link key={a.path} to={a.path}
                 className="glass-card p-4 flex flex-col items-center gap-2 hover:bg-secondary/50 transition-colors group">

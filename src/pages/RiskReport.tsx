@@ -194,11 +194,11 @@ export default function RiskReport() {
 
   return (
     <AppLayout>
-      <div className="max-w-2xl mx-auto space-y-6">
+      <div className="max-w-2xl mx-auto space-y-4 sm:space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-2xl font-heading font-bold flex items-center gap-2">
-            <ShieldCheck className="h-6 w-6 text-primary" />
+          <h1 className="text-xl sm:text-2xl font-heading font-bold flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 sm:h-6 sm:w-6 text-primary shrink-0" />
             Your Risk Report
           </h1>
           {lastEvalTime && (
@@ -210,7 +210,7 @@ export default function RiskReport() {
 
         {/* Risk Score Hero */}
         <motion.div
-          className="glass-card p-8 flex flex-col items-center"
+          className="glass-card p-5 sm:p-8 flex flex-col items-center"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
         >

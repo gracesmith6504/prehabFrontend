@@ -185,7 +185,7 @@ export default function CoachAnalytics() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <ChartContainer config={riskChartConfig} className="h-[280px] w-full">
+                <ChartContainer config={riskChartConfig} className="h-[220px] sm:h-[280px] w-full">
                   <ComposedChart data={riskData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" />
                     <XAxis dataKey="date" tick={tickStyle} interval="preserveStartEnd" />
@@ -208,7 +208,7 @@ export default function CoachAnalytics() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <ChartContainer config={loadChartConfig} className="h-[280px] w-full">
+                <ChartContainer config={loadChartConfig} className="h-[220px] sm:h-[280px] w-full">
                   <AreaChart data={loadData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
                     <defs>
                       <linearGradient id="loadGradient" x1="0" y1="0" x2="0" y2="1">
@@ -235,7 +235,7 @@ export default function CoachAnalytics() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <ChartContainer config={sorenessChartConfig} className="h-[280px] w-full">
+                <ChartContainer config={sorenessChartConfig} className="h-[220px] sm:h-[280px] w-full">
                   <LineChart data={sorenessData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" />
                     <XAxis dataKey="date" tick={tickStyle} interval="preserveStartEnd" />

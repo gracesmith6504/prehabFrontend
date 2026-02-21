@@ -249,12 +249,12 @@ export default function PlanView() {
 
   return (
     <AppLayout>
-      <div className="max-w-4xl mx-auto space-y-6">
+      <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6">
         {/* Header */}
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-3xl font-heading font-bold flex items-center gap-3">
-              <ClipboardList className="h-8 w-8 text-primary" />
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-heading font-bold flex items-center gap-2 sm:gap-3 flex-wrap">
+              <ClipboardList className="h-6 w-6 sm:h-8 sm:w-8 text-primary shrink-0" />
               TRAINING PLAN
               {isCoachPlan && (
                 <Badge variant="secondary" className="ml-2 gap-1 text-xs font-semibold uppercase tracking-wider">
@@ -303,7 +303,7 @@ export default function PlanView() {
         </div>
 
         {/* Calendar grid */}
-        <div className="grid grid-cols-7 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
           {weekDates.map(({ day, date }, idx) => {
             const session = adjusted.find(s => s.day === day);
             const orig = original.find(s => s.day === day);
@@ -316,7 +316,7 @@ export default function PlanView() {
             return (
               <motion.div
                 key={`${weekOffset}-${day}`}
-                className={`rounded-xl border p-3 flex flex-col gap-2 min-h-[160px] transition-colors ${
+                className={`rounded-xl border p-2.5 sm:p-3 flex flex-col gap-1.5 sm:gap-2 min-h-[140px] sm:min-h-[160px] transition-colors ${
                   isToday ? 'border-primary bg-primary/5 ring-2 ring-primary/20' : 'border-border bg-card'
                 } ${!isFuture && session ? 'cursor-pointer hover:border-primary/50' : ''}`}
                 initial={{ opacity: 0, y: 10 }}
