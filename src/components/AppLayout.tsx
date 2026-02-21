@@ -7,13 +7,14 @@ import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from '@/components/ui/sheet';
 import {
-  Activity, LogOut, BarChart3, Calendar,
+  LogOut, BarChart3, Calendar,
   ClipboardList, LayoutDashboard, AlertTriangle,
   TrendingUp, FileText, Settings, Menu,
 } from 'lucide-react';
+import prehabLogo from '@/assets/prehab-logo.png';
 
 const athleteNav = [
-  { path: '/dashboard', label: 'Dashboard', icon: Activity },
+  { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/cycle-setup', label: 'Cycle', icon: Calendar },
   { path: '/plan', label: 'Training Plan', icon: ClipboardList },
   { path: '/risk-report', label: 'Risk', icon: BarChart3 },
@@ -54,8 +55,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <Menu className="h-5 w-5 text-muted-foreground" />
           </button>
           <Link to="/" className="flex items-center gap-2">
-            <Activity className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
-            <span className="font-heading text-base sm:text-lg font-bold uppercase tracking-wider">CycleAgent</span>
+            <img src={prehabLogo} alt="PREHAB logo" className="h-7 w-7 sm:h-8 sm:w-8" />
+            <span className="font-heading text-base sm:text-lg font-bold uppercase tracking-wider">PREHAB</span>
           </Link>
         </div>
         <div className="flex items-center gap-1.5 sm:gap-2">
@@ -96,8 +97,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <SheetContent side="left" className="w-64 p-0">
             <SheetHeader className="px-4 pt-4 pb-2">
               <SheetTitle className="flex items-center gap-2 font-heading text-base uppercase tracking-wider">
-                <Activity className="h-5 w-5 text-primary" />
-                CycleAgent
+                <img src={prehabLogo} alt="PREHAB logo" className="h-6 w-6" />
+                PREHAB
               </SheetTitle>
             </SheetHeader>
             <nav className="flex flex-col gap-1 px-3 py-2">
