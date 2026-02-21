@@ -2,6 +2,7 @@ import { ReactNode } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { motion } from 'framer-motion';
+import ThemeToggle from '@/components/ThemeToggle';
 import {
   Activity, LogOut, BarChart3, Calendar,
   ClipboardList, LayoutDashboard, AlertTriangle,
@@ -43,8 +44,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <Activity className="h-6 w-6 text-primary" />
           <span className="font-heading text-lg font-bold uppercase tracking-wider">CycleAgent</span>
         </Link>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground hidden sm:block">{profile?.full_name || profile?.email}</span>
+          <ThemeToggle />
           <button onClick={handleSignOut} className="p-2 rounded-lg hover:bg-secondary transition-colors" title="Sign out">
             <LogOut className="h-4 w-4 text-muted-foreground" />
           </button>
