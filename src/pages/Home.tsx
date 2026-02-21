@@ -35,7 +35,7 @@ export default function Home() {
               <span className="text-primary text-glow">WITH YOUR</span><br />
               <span className="text-primary text-glow">BODY</span>
             </h1>
-            <p className="font-tagline text-base md:text-lg text-muted-foreground max-w-xl mb-10 font-medium tracking-wide">
+            <p className="text-base md:text-lg text-muted-foreground max-w-xl mb-10">
               AI-powered training optimization that adapts to your menstrual cycle, training load, and body signals to reduce injury risk and maximize performance.
             </p>
             <div className="flex gap-4">
