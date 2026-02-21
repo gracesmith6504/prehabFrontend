@@ -6,10 +6,7 @@ import RiskGauge from '@/components/RiskGauge';
 import RiskBadge from '@/components/RiskBadge';
 import SimplifiedDrivers from '@/components/SimplifiedDrivers';
 import PlanChanges from '@/components/PlanChanges';
-import {
-  getCurrentPhase, calculateAcuteChronicRatio, calculateSorenessContribution,
-  calculateRiskScore, type MenstrualPhase,
-} from '@/lib/riskEngine';
+import { getCurrentPhase, type MenstrualPhase } from '@/lib/riskEngine';
 import { ShieldCheck, TrendingUp, TrendingDown, Minus, Clock, AlertTriangle, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { formatDistanceToNow } from 'date-fns';
@@ -37,11 +34,11 @@ interface PredictionInfo {
 function buildPlainSummary(
   phase: MenstrualPhase,
   riskLevel: string,
-  acRatio: number,
-  sorenessContrib: number,
+  explanation: string | null,
 ): string {
-  const parts: string[] = [];
+  if (explanation) return explanation;
 
+  const parts: string[] = [];
   if (riskLevel === 'Low') {
     parts.push("You're in a good place right now.");
   } else if (riskLevel === 'Medium') {
@@ -56,60 +53,7 @@ function buildPlainSummary(
     parts.push(`Your current cycle phase (${phase}) is generally supportive of training.`);
   }
 
-  if (acRatio > 1.3) {
-    parts.push("Your recent training load has increased quite a bit — consider easing off slightly.");
-  } else if (acRatio < 0.8) {
-    parts.push("Your training load has been lighter than usual recently.");
-  }
-
-  if (sorenessContrib > 50) {
-    parts.push("You've reported elevated soreness — listen to your body and prioritise recovery.");
-  } else if (sorenessContrib > 25) {
-    parts.push("Mild soreness noted — nothing unusual, but worth monitoring.");
-  }
-
   return parts.join(' ');
-}
-
-function buildInfluenceExplanation(
-  phase: MenstrualPhase,
-  acRatio: number,
-  sorenessContrib: number,
-): string[] {
-  const items: string[] = [];
-
-  // Phase
-  if (phase === 'luteal') {
-    items.push("Your luteal phase can increase fatigue and reduce recovery speed.");
-  } else if (phase === 'menstruation') {
-    items.push("During menstruation, energy levels and recovery may dip — this is completely normal.");
-  } else if (phase === 'ovulatory') {
-    items.push("You're in your ovulatory phase — energy is typically higher, which supports training.");
-  } else if (phase === 'follicular') {
-    items.push("The follicular phase is generally a great time for higher-intensity work.");
-  }
-
-  // Load
-  if (acRatio > 1.5) {
-    items.push("Your recent training load has spiked compared to your longer-term average. A sudden increase raises injury risk.");
-  } else if (acRatio > 1.2) {
-    items.push("Training load is creeping up — not alarming, but worth being mindful of.");
-  } else if (acRatio < 0.8) {
-    items.push("Training has been lighter than usual. A sudden return to high loads could increase risk.");
-  } else {
-    items.push("Your training load is well-balanced relative to your recent history.");
-  }
-
-  // Soreness
-  if (sorenessContrib > 50) {
-    items.push("Soreness is significantly elevated. Extra rest or lighter sessions could help your body recover.");
-  } else if (sorenessContrib > 25) {
-    items.push("You've noted some mild soreness — keep stretching and warming up properly.");
-  } else {
-    items.push("Soreness levels look manageable — your body seems to be recovering well.");
-  }
-
-  return items;
 }
 
 export default function RiskReport() {
@@ -118,78 +62,65 @@ export default function RiskReport() {
   const [phase, setPhase] = useState<MenstrualPhase>('unknown');
   const [riskScore, setRiskScore] = useState(0);
   const [riskLevel, setRiskLevel] = useState('Low');
-  const [acRatio, setAcRatio] = useState(0);
-  const [sorenessContrib, setSorenessContrib] = useState(0);
   const [loading, setLoading] = useState(true);
   const [previousScore, setPreviousScore] = useState<number | null>(null);
   const [escalation, setEscalation] = useState<EscalationInfo | null>(null);
   const [prediction, setPrediction] = useState<PredictionInfo | null>(null);
   const [lastEvalTime, setLastEvalTime] = useState<string | null>(null);
+  const [explanation, setExplanation] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
 
-    const compute = async () => {
-      const [apRes, predRes, escRes] = await Promise.all([
+    const load = async () => {
+      // Fetch all data in parallel
+      const [apRes, predRes, prevPredRes, escRes, reportRes] = await Promise.all([
         supabase.from('athlete_profiles').select('*').eq('user_id', user.id).maybeSingle(),
         supabase.from('risk_predictions').select('*').eq('athlete_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+        supabase.from('risk_predictions').select('risk_score').eq('athlete_id', user.id).order('created_at', { ascending: false }).limit(2),
         supabase.from('escalations').select('*').eq('athlete_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+        supabase.from('risk_reports').select('explanation').eq('athlete_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       ]);
 
+      // Risk prediction (source of truth)
       if (predRes.data) {
-        setPrediction(predRes.data as unknown as PredictionInfo);
+        const pred = predRes.data as unknown as PredictionInfo;
+        setPrediction(pred);
+        setRiskScore(Number(pred.risk_score));
+        setRiskLevel(pred.risk_level);
         setLastEvalTime(predRes.data.created_at);
       }
+
+      // Previous prediction for delta
+      if (prevPredRes.data && prevPredRes.data.length > 1) {
+        setPreviousScore(Number(prevPredRes.data[1].risk_score));
+      }
+
+      // ML explanation from risk_reports
+      if (reportRes.data?.explanation) {
+        setExplanation(reportRes.data.explanation);
+      }
+
       if (escRes.data) setEscalation(escRes.data as unknown as EscalationInfo);
 
+      // Phase (still derived from profile for display)
       const ap = apRes.data;
       const currentPhase = ap?.cycle_start_date
         ? getCurrentPhase(ap.cycle_start_date, ap.cycle_length || 28, ap.menstruation_length || 5)
         : 'unknown' as MenstrualPhase;
       setPhase(currentPhase);
 
-      const since = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      const { data: sessions } = await supabase.from('training_sessions').select('date, duration, rpe, intensity').eq('athlete_id', user.id).gte('date', since);
-      const ratio = calculateAcuteChronicRatio(sessions || []);
-      setAcRatio(ratio);
-
-      const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      const { data: soreness } = await supabase.from('soreness_logs').select('knee, hamstring, groin, calf, other_value').eq('athlete_id', user.id).gte('date', threeDaysAgo).order('date', { ascending: false });
-      const sc = calculateSorenessContribution(soreness || []);
-      setSorenessContrib(sc);
-
-      if (predRes.data) {
-        setRiskScore(Number(predRes.data.risk_score));
-        setRiskLevel(predRes.data.risk_level);
-      } else {
-        const risk = calculateRiskScore(currentPhase, ratio, sc);
-        setRiskScore(risk.score);
-        setRiskLevel(risk.level);
-      }
-
-      const { data: recentReports } = await supabase
-        .from('risk_reports')
-        .select('risk_score')
-        .eq('athlete_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(2);
-
-      if (recentReports && recentReports.length > 1) {
-        setPreviousScore(Number(recentReports[1].risk_score));
-      }
-
       setLoading(false);
     };
 
-    compute();
+    load();
   }, [user]);
 
   if (loading) {
     return <AppLayout><div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div></AppLayout>;
   }
 
-  const summary = buildPlainSummary(phase, riskLevel, acRatio, sorenessContrib);
-  const influences = buildInfluenceExplanation(phase, acRatio, sorenessContrib);
+  const summary = buildPlainSummary(phase, riskLevel, explanation);
   const delta = previousScore !== null ? riskScore - previousScore : null;
 
   return (
@@ -236,7 +167,7 @@ export default function RiskReport() {
           )}
         </motion.div>
 
-        {/* Plain-Language Summary */}
+        {/* Plain-Language Summary (from ML explanation) */}
         <motion.div
           className="glass-card p-6"
           initial={{ opacity: 0, y: 10 }}
@@ -246,26 +177,8 @@ export default function RiskReport() {
           <p className="text-sm leading-relaxed">{summary}</p>
         </motion.div>
 
-        {/* Simplified Drivers (plain-language tags) */}
+        {/* Simplified Drivers (from ML top_drivers) */}
         {user && <SimplifiedDrivers athleteId={user.id} drivers={prediction?.top_drivers} />}
-
-        {/* What Influenced Your Risk */}
-        <motion.div
-          className="glass-card p-6 space-y-3"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-        >
-          <h2 className="font-heading text-sm font-bold uppercase tracking-wider">What Influenced Your Risk</h2>
-          <ul className="space-y-2.5">
-            {influences.map((item, i) => (
-              <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
-                <span className="text-primary mt-0.5 shrink-0">•</span>
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-        </motion.div>
 
         {/* Plan Changes */}
         {user && <PlanChanges athleteId={user.id} />}
