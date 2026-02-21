@@ -120,16 +120,22 @@ interface AnalysisResponse {
 }
 
 async function callMLService(mlUrl: string, payload: any): Promise<AnalysisResponse> {
-  const resp = await fetch(`${mlUrl}/analyse/`, {
+  const url = `${mlUrl}/analyse/`;
+  const bodyStr = JSON.stringify(payload);
+  console.log(`[DEBUG] Calling ML service: ${url}`);
+  console.log(`[DEBUG] Payload: ${bodyStr}`);
+  const resp = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: bodyStr,
   });
+  const respBody = await resp.text();
+  console.log(`[DEBUG] ML response status: ${resp.status}`);
+  console.log(`[DEBUG] ML response body: ${respBody}`);
   if (!resp.ok) {
-    const body = await resp.text();
-    throw new Error(`ML service returned ${resp.status}: ${body}`);
+    throw new Error(`ML service returned ${resp.status}: ${respBody}`);
   }
-  return await resp.json();
+  return JSON.parse(respBody);
 }
 
 function mapRiskLevel(composite: string): "Low" | "Medium" | "High" {
@@ -318,9 +324,9 @@ Deno.serve(async (req: Request) => {
         days_since_last_rest: computeDaysSinceLastRest(sessions || []),
         last_7_days_soreness: buildLast7DaysSoreness(soreLogs || []),
         last_7_days_load: buildLast7DaysLoad(sessions || []),
-        previous_injuries: null,
+        previous_injuries: [],
         total_injuries_past_year: 0,
-        days_since_last_injury: null,
+        days_since_last_injury: 0,
       };
 
       // ===== 3. CALL ML SERVICE =====
