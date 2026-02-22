@@ -220,10 +220,10 @@ async function recordPaidSignal(
       },
       body: JSON.stringify({
         signals: [{
-          eventName,
-          agentId: PAID_AGENT_ID,
-          customer: { externalCustomerId: athleteId },
-          orderId,
+          event_name: eventName,
+          agent_id: PAID_AGENT_ID,
+          external_customer_id: athleteId,
+          external_product_id: orderId,
           data: {
             risk_level: riskLevel,
             plan_adjusted: planAdjusted,
