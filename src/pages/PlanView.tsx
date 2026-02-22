@@ -7,9 +7,7 @@ import FeedbackButtons from '@/components/FeedbackButtons';
 import SessionLogDialog from '@/components/SessionLogDialog';
 import ExtraSessionDialog from '@/components/ExtraSessionDialog';
 import {
-  generateDefaultPlan, adjustPlan, generateExplanation,
-  getCurrentPhase, calculateAcuteChronicRatio, calculateSorenessContribution,
-  calculateRiskScore, type PlanSession, type MenstrualPhase,
+  generateDefaultPlan, adjustPlan, type PlanSession,
 } from '@/lib/riskEngine';
 import { ClipboardList, ChevronLeft, ChevronRight, Bot, ShieldCheck, CheckCircle2, Plus, User, Edit3, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -129,21 +127,19 @@ export default function PlanView() {
   useEffect(() => {
     if (!user) return;
     const compute = async () => {
-      const { data: ap } = await supabase.from('athlete_profiles').select('*').eq('user_id', user.id).maybeSingle();
-      const phase = ap?.cycle_start_date
-        ? getCurrentPhase(ap.cycle_start_date, ap.cycle_length || 28, ap.menstruation_length || 5)
-        : 'unknown' as MenstrualPhase;
+      // Fetch risk from DB (source of truth) instead of local calculations
+      const { data: pred } = await supabase
+        .from('risk_predictions')
+        .select('id, risk_score, risk_level')
+        .eq('athlete_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-      const since = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      const { data: sessions } = await supabase.from('training_sessions').select('date, duration, rpe, intensity').eq('athlete_id', user.id).gte('date', since);
-      const ratio = calculateAcuteChronicRatio(sessions || []);
-
-      const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      const { data: soreness } = await supabase.from('soreness_logs').select('knee, hamstring, groin, calf, other_value').eq('athlete_id', user.id).gte('date', threeDaysAgo).order('date', { ascending: false });
-      const sorenessContrib = calculateSorenessContribution(soreness || []);
-
-      const risk = calculateRiskScore(phase, ratio, sorenessContrib);
-      setRiskLevel(risk.level);
+      const dbRiskScore = pred ? Number(pred.risk_score) : 0;
+      const dbRiskLevel = pred?.risk_level || 'Low';
+      setRiskLevel(dbRiskLevel);
+      if (pred) setRiskPredictionId(pred.id);
 
       const { data: savedPlan } = await supabase.from('weekly_plans').select('*').eq('athlete_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
 
@@ -157,33 +153,32 @@ export default function PlanView() {
         }
       }
 
-      const { data: pred } = await supabase.from('risk_predictions').select('id, risk_prob').eq('athlete_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
-      if (pred) setRiskPredictionId(pred.id);
-
       const isCoachPlan = (savedPlan?.plan_owner_type || 'athlete') === 'coach';
       const basePlan = savedPlan?.original_plan
         ? (savedPlan.original_plan as unknown as PlanSession[])
         : generateDefaultPlan();
       setOriginal(basePlan);
 
-      if (isCoachPlan && savedPlan?.adjusted_plan) {
+      // Use saved adjusted plan and explanation from DB when available
+      if (savedPlan?.adjusted_plan && Array.isArray(savedPlan.adjusted_plan) && (savedPlan.adjusted_plan as unknown[]).length > 0) {
         setAdjusted(savedPlan.adjusted_plan as unknown as PlanSession[]);
-        setExplanation(savedPlan.explanation || 'This plan was assigned by your coach.');
+        setExplanation(savedPlan.explanation || (isCoachPlan ? 'This plan was assigned by your coach.' : 'AI-adjusted plan based on your risk profile.'));
       } else {
-        const result = adjustPlan(basePlan, risk.score);
+        // Fallback: generate locally using DB risk score
+        const result = adjustPlan(basePlan, dbRiskScore);
         setAdjusted(result.adjusted);
-        setExplanation(generateExplanation(phase, risk.score, ratio, sorenessContrib, result.changes));
+        setExplanation(savedPlan?.explanation || 'Plan adjusted based on your current risk level.');
       }
 
       if (!savedPlan) {
-        const result = adjustPlan(basePlan, risk.score);
+        const result = adjustPlan(basePlan, dbRiskScore);
         const { data: newPlan } = await supabase.from('weekly_plans').insert({
           athlete_id: user.id,
           original_plan: basePlan as any,
           adjusted_plan: result.adjusted as any,
-          risk_score: risk.score,
-          risk_level: risk.level,
-          explanation: generateExplanation(phase, risk.score, ratio, sorenessContrib, result.changes),
+          risk_score: dbRiskScore,
+          risk_level: dbRiskLevel,
+          explanation: 'Plan adjusted based on your current risk level.',
         }).select('id').maybeSingle();
         if (newPlan) setWeeklyPlanId(newPlan.id);
       }
