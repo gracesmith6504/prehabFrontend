@@ -7,6 +7,7 @@ import { getCurrentPhase, type MenstrualPhase } from '@/lib/riskEngine';
 import { Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 import CycleRing from '@/components/CycleRing';
 import PhaseInsight from '@/components/PhaseInsight';
+import WearableCycleSync from '@/components/WearableCycleSync';
 import { Switch } from '@/components/ui/switch';
 import { format } from 'date-fns';
 
@@ -71,6 +72,21 @@ export default function CycleSetup() {
     setSaving(false);
   };
 
+  const handleWearableSync = async (data: { lastPeriodStart: string; cycleLength: number; menstruationLength: number }) => {
+    setStartDate(data.lastPeriodStart);
+    setCycleLength(data.cycleLength);
+    setMenstruationLength(data.menstruationLength);
+    if (!user) return;
+    setSaving(true);
+    await supabase.from('athlete_profiles').update({
+      cycle_start_date: data.startDate,
+      cycle_length: data.cycleLength,
+      menstruation_length: data.menstruationLength,
+    }).eq('user_id', user.id);
+    toast({ title: 'Cycle synced from Samsung Health' });
+    setSaving(false);
+  };
+
   const handlePeriodToday = async () => {
     const today = format(new Date(), 'yyyy-MM-dd');
     setStartDate(today);
@@ -97,6 +113,14 @@ export default function CycleSetup() {
           <h1 className="text-3xl font-heading font-extrabold tracking-tight">Your Cycle</h1>
           <p className="text-muted-foreground text-sm mt-1">Performance awareness through every phase</p>
         </div>
+
+        {/* Samsung Health sync */}
+        {user && (
+          <WearableCycleSync
+            athleteId={user.id}
+            onSync={handleWearableSync}
+          />
+        )}
 
         {/* Visualization card */}
         <div className="glass-card p-8 flex flex-col items-center gap-6">

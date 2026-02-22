@@ -256,6 +256,16 @@ export default function Dashboard() {
             <p className="text-sm text-muted-foreground mt-1">
               Risk factor: ×{PHASE_MULTIPLIERS[phase].toFixed(1)}
             </p>
+            {phase !== 'unknown' && (
+              <Link
+                to="/cycle-setup"
+                className="flex items-center gap-1 mt-2 text-xs font-medium"
+                style={{ color: '#1DBE6E' }}
+              >
+                <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: '#1DBE6E' }} />
+                Samsung Health
+              </Link>
+            )}
           </div>
 
           <div className="glass-card p-4 sm:p-5">
