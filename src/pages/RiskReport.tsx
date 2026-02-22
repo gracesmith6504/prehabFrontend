@@ -8,6 +8,7 @@ import SimplifiedDrivers from '@/components/SimplifiedDrivers';
 import PlanChanges from '@/components/PlanChanges';
 import { getCurrentPhase, type MenstrualPhase } from '@/lib/riskEngine';
 import { formatTriggerReason } from '@/lib/utils';
+import EvidencePanel from '@/components/EvidencePanel';
 import { ShieldCheck, TrendingUp, TrendingDown, Minus, Clock, AlertTriangle, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { formatDistanceToNow } from 'date-fns';
@@ -180,6 +181,9 @@ export default function RiskReport() {
 
         {/* Simplified Drivers (from ML top_drivers) */}
         {user && <SimplifiedDrivers athleteId={user.id} drivers={prediction?.top_drivers} />}
+
+        {/* Scientific evidence base */}
+        <EvidencePanel />
 
         {/* Plan Changes */}
         {user && <PlanChanges athleteId={user.id} />}
