@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowRight, Shield, Brain, TrendingUp, Activity, Users, BarChart3, Heart } from 'lucide-react';
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import heroImage from '@/assets/soccer-women-hero.jpg';
 import prehabLogo from '@/assets/prehab-logo.png';
 
@@ -206,6 +207,34 @@ export default function Home() {
           <motion.p {...fade} className="text-center text-sm font-medium text-muted-foreground mt-8 max-w-lg mx-auto">
             PREHAB monetizes measurable AI work, proving economic value for every action performed.
           </motion.p>
+        </div>
+      </section>
+
+      {/* ── FAQ ── */}
+      <section className="py-20 md:py-28 border-t border-border">
+        <div className="container max-w-3xl">
+          <motion.p {...fade} className="text-primary text-xs font-bold uppercase tracking-[0.2em] mb-3 text-center">FAQ</motion.p>
+          <motion.h2 {...fade} className="text-2xl md:text-3xl font-heading font-bold text-center mb-12">
+            COMMON <span className="text-primary">QUESTIONS</span>
+          </motion.h2>
+
+          <motion.div {...fade}>
+            <Accordion type="single" collapsible className="space-y-2">
+              {[
+                { q: "What counts as an autonomous intervention?", a: "An intervention is any time the AI agent autonomously modifies your training plan (e.g. swapping a session type, reducing intensity) or creates an escalation alert for your coach. Passive monitoring and risk scoring are always included — you only use interventions when the agent takes action." },
+                { q: "What happens when I run out of included interventions?", a: "You can keep training without interruption. Each additional intervention is billed at €3. You'll always see your current usage in the dashboard before the agent acts, so there are no surprises." },
+                { q: "Can I cap my monthly spend?", a: "Yes. You can set a monthly intervention limit in your settings. Once reached, the agent will flag recommendations but won't act autonomously — it hands decisions back to you or your coach." },
+                { q: "How does the Coach Plan share interventions across athletes?", a: "The 40 included interventions are pooled across all athletes on the plan. If one athlete needs more adjustments in a given month, the pool flexes to cover it. Additional interventions beyond 40 are €3 each." },
+                { q: "Is there a free trial?", a: "Yes — every new account gets a 14-day free trial with full agent capabilities and 5 included interventions so you can experience the value before committing." },
+                { q: "What data does the AI agent use?", a: "The agent combines your menstrual cycle phase, training load history, daily soreness logs, and wearable metrics (steps, heart rate, sleep) to score injury risk and decide when to intervene." },
+              ].map((item) => (
+                <AccordionItem key={item.q} value={item.q} className="glass-card px-6 border-none">
+                  <AccordionTrigger className="text-sm font-medium text-left hover:no-underline">{item.q}</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground text-sm leading-relaxed">{item.a}</AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </motion.div>
         </div>
       </section>
 
