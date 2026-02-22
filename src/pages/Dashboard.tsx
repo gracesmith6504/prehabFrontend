@@ -6,19 +6,15 @@ import AppLayout from '@/components/AppLayout';
 import RiskGauge from '@/components/RiskGauge';
 import RiskBadge from '@/components/RiskBadge';
 import TodaysSession from '@/components/TodaysSession';
-import AgentAdaptabilityCard from '@/components/AgentAdaptabilityCard';
-import WearableMetricsCard from '@/components/WearableMetricsCard';
 import SimplifiedDrivers from '@/components/SimplifiedDrivers';
-import PlanChanges from '@/components/PlanChanges';
 import GoalTracker from '@/components/GoalTracker';
 import { motion } from 'framer-motion';
 import {
   getCurrentPhase,
-  PHASE_MULTIPLIERS,
   type MenstrualPhase,
   type PlanSession,
 } from '@/lib/riskEngine';
-import { Calendar, ClipboardList, BarChart3, AlertTriangle, TrendingUp, TrendingDown, Minus, RefreshCw } from 'lucide-react';
+import { Calendar, ClipboardList, BarChart3, AlertTriangle, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -27,20 +23,13 @@ export default function Dashboard() {
   const { user, profile } = useAuth();
   const [riskScore, setRiskScore] = useState(0);
   const [riskLevel, setRiskLevel] = useState('Low');
-  const [riskConfidence, setRiskConfidence] = useState<number | null>(null);
   const [phase, setPhase] = useState<MenstrualPhase>('unknown');
-  const [acRatio, setAcRatio] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [previousScore, setPreviousScore] = useState<number | null>(null);
   const [reEvaluating, setReEvaluating] = useState(false);
 
   // Today's session
   const [todaySession, setTodaySession] = useState<PlanSession | null>(null);
   const [todayLog, setTodayLog] = useState<{ id: string; duration: number; rpe: number } | null>(null);
-
-  // AI update
-  const [lastAgentUpdate, setLastAgentUpdate] = useState<string | null>(null);
-  const [planAdjusted, setPlanAdjusted] = useState(false);
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const todayDay = new Date().toLocaleDateString('en-US', { weekday: 'long' });
@@ -68,10 +57,9 @@ export default function Dashboard() {
         : 'unknown';
       setPhase(currentPhase);
 
-      // Fetch ML risk prediction from database (source of truth)
       const { data: latestPrediction } = await supabase
         .from('risk_predictions')
-        .select('risk_score, risk_level, confidence')
+        .select('risk_score, risk_level')
         .eq('athlete_id', user.id)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -80,34 +68,11 @@ export default function Dashboard() {
       if (latestPrediction) {
         setRiskScore(latestPrediction.risk_score);
         setRiskLevel(latestPrediction.risk_level);
-        setRiskConfidence(latestPrediction.confidence);
       }
 
-      // AC ratio from latest risk report (source of truth)
-      const { data: latestReport } = await supabase
-        .from('risk_reports')
-        .select('acute_chronic_ratio')
-        .eq('athlete_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      setAcRatio(latestReport?.acute_chronic_ratio ?? 0);
-
-      // Previous score for trend comparison (second most recent prediction)
-      const { data: prevPredictions } = await supabase
-        .from('risk_predictions')
-        .select('risk_score')
-        .eq('athlete_id', user.id)
-        .order('created_at', { ascending: false })
-        .range(1, 1);
-      if (prevPredictions && prevPredictions.length > 0) {
-        setPreviousScore(prevPredictions[0].risk_score);
-      }
-
-      // Get today's planned session from weekly plan
       const { data: plan } = await supabase
         .from('weekly_plans')
-        .select('adjusted_plan, original_plan, agent_run_id')
+        .select('adjusted_plan')
         .eq('athlete_id', user.id)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -115,37 +80,7 @@ export default function Dashboard() {
 
       if (plan) {
         const adjustedPlan = (plan.adjusted_plan as unknown as PlanSession[]) || [];
-        const originalPlan = (plan.original_plan as unknown as PlanSession[]) || [];
-        const todaySess = adjustedPlan.find(s => s.day === todayDay) || null;
-        setTodaySession(todaySess);
-
-        // Check if plan was adjusted
-        const hasChanges = adjustedPlan.some(adj => {
-          const orig = originalPlan.find(o => o.day === adj.day);
-          return orig && (orig.intensity !== adj.intensity || orig.duration !== adj.duration || orig.type !== adj.type);
-        });
-        setPlanAdjusted(hasChanges);
-
-        // Get agent run time
-        if (plan.agent_run_id) {
-          const { data: run } = await supabase
-            .from('agent_runs')
-            .select('completed_at, started_at')
-            .eq('id', plan.agent_run_id)
-            .maybeSingle();
-          if (run) setLastAgentUpdate(run.completed_at || run.started_at);
-        }
-      }
-
-      // If no agent run from plan, get latest
-      if (!lastAgentUpdate) {
-        const { data: latestRun } = await supabase
-          .from('agent_runs')
-          .select('completed_at, started_at')
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (latestRun) setLastAgentUpdate(latestRun.completed_at || latestRun.started_at);
+        setTodaySession(adjustedPlan.find(s => s.day === todayDay) || null);
       }
 
       setLoading(false);
@@ -156,21 +91,21 @@ export default function Dashboard() {
   }, [user]);
 
   const quickActions = [
-    { path: '/plan', label: 'Training Plan', icon: ClipboardList, color: 'text-primary' },
-    { path: '/cycle-setup', label: 'Update Cycle', icon: Calendar, color: 'text-primary' },
-    { path: '/risk-report', label: 'Risk Report', icon: BarChart3, color: 'text-primary' },
+    { path: '/plan', label: 'Training Plan', icon: ClipboardList },
+    { path: '/cycle-setup', label: 'Cycle Info', icon: Calendar },
+    { path: '/risk-report', label: 'Full Report', icon: BarChart3 },
   ];
 
   return (
     <AppLayout>
-      <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6">
+      <div className="max-w-2xl mx-auto space-y-6">
         {/* Greeting */}
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-heading font-bold truncate">
-              WELCOME{profile?.full_name ? `, ${profile.full_name.toUpperCase()}` : ''}
+            <h1 className="text-xl sm:text-2xl font-heading font-bold truncate">
+              {profile?.full_name ? `Hi, ${profile.full_name}` : 'Welcome'}
             </h1>
-            <p className="text-muted-foreground text-sm mt-1">Here's your training snapshot for today.</p>
+            <p className="text-muted-foreground text-sm mt-0.5">Your training snapshot for today</p>
           </div>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -181,13 +116,8 @@ export default function Dashboard() {
                   const { error } = await supabase.functions.invoke('agent-runner', {
                     body: { trigger_type: 'manual', athlete_id: user?.id },
                   });
-                  if (error) {
-                    toast.error('Re-evaluation failed');
-                  } else {
-                    toast.success('Risk re-evaluated');
-                    // Reload data
-                    window.location.reload();
-                  }
+                  if (error) toast.error('Re-evaluation failed');
+                  else { toast.success('Risk re-evaluated'); window.location.reload(); }
                   setReEvaluating(false);
                 }}
                 className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-secondary/50 transition-colors"
@@ -205,18 +135,40 @@ export default function Dashboard() {
             className="flex items-center gap-3 p-4 rounded-xl bg-destructive/10 border border-destructive/30"
             initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
           >
-            <AlertTriangle className="h-6 w-6 text-destructive flex-shrink-0" />
+            <AlertTriangle className="h-5 w-5 text-destructive flex-shrink-0" />
             <div className="flex-1">
-              <p className="font-bold text-destructive">HIGH INJURY RISK</p>
-              <p className="text-sm text-muted-foreground">Consider reducing intensity today. Your body needs extra care.</p>
+              <p className="font-bold text-destructive text-sm">High injury risk detected</p>
+              <p className="text-xs text-muted-foreground">Consider reducing intensity today.</p>
             </div>
-            <Link to="/risk-report" className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg text-sm font-bold">
+            <Link to="/risk-report" className="px-3 py-1.5 bg-destructive text-destructive-foreground rounded-lg text-xs font-bold">
               Details
             </Link>
           </motion.div>
         )}
 
-        {/* Today's Session — prominent at top */}
+        {/* Risk + Phase — compact row */}
+        <div className="glass-card p-5">
+          <div className="flex items-center gap-6">
+            <div className="flex flex-col items-center">
+              {loading ? (
+                <div className="w-20 h-20 rounded-full bg-secondary animate-pulse" />
+              ) : (
+                <RiskGauge score={riskScore} />
+              )}
+              <div className="mt-1.5"><RiskBadge level={riskLevel} /></div>
+            </div>
+            <div className="flex-1 space-y-2">
+              {user && <SimplifiedDrivers athleteId={user.id} />}
+              {phase !== 'unknown' && (
+                <p className="text-xs text-muted-foreground">
+                  Cycle phase: <span className="capitalize text-foreground font-medium">{phase}</span>
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Today's Session */}
         {!loading && user && (
           <TodaysSession
             session={todaySession}
@@ -226,97 +178,26 @@ export default function Dashboard() {
           />
         )}
 
-        {/* Stats Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-          <div className="glass-card p-4 sm:p-5 flex flex-col items-center">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-3">Injury Risk</p>
-            {loading ? (
-              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-secondary animate-pulse" />
-            ) : (
-              <RiskGauge score={riskScore} />
-            )}
-            <div className="mt-2"><RiskBadge level={riskLevel} /></div>
-            {previousScore !== null && (
-              <div className={`flex items-center gap-1 mt-1.5 text-xs font-medium ${
-                riskScore > previousScore ? 'text-destructive' : riskScore < previousScore ? 'text-primary' : 'text-muted-foreground'
-              }`}>
-                {riskScore > previousScore ? (
-                  <><TrendingUp className="h-3.5 w-3.5" /> +{riskScore - previousScore} from last</>
-                ) : riskScore < previousScore ? (
-                  <><TrendingDown className="h-3.5 w-3.5" /> {riskScore - previousScore} from last</>
-                ) : (
-                  <><Minus className="h-3.5 w-3.5" /> No change</>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="glass-card p-4 sm:p-5">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Current Phase</p>
-            <p className="text-xl sm:text-2xl font-heading font-bold capitalize text-primary">{phase}</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              {PHASE_MULTIPLIERS[phase] >= 1.2 ? 'Higher injury risk in this phase' : PHASE_MULTIPLIERS[phase] >= 1.1 ? 'Slightly elevated risk' : 'Lower risk in this phase'}
-            </p>
-            {phase !== 'unknown' && (
-              <Link
-                to="/cycle-setup"
-                className="flex items-center gap-1 mt-2 text-xs font-medium"
-                style={{ color: '#1DBE6E' }}
-              >
-                <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: '#1DBE6E' }} />
-                Samsung Health
-              </Link>
-            )}
-          </div>
-
-          <div className="glass-card p-4 sm:p-5">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Training Load</p>
-            <p className={`text-xl sm:text-2xl font-heading font-bold ${acRatio > 1.5 ? 'risk-high' : acRatio > 1.2 ? 'risk-medium' : 'risk-low'}`}>
-              {acRatio > 1.5 ? 'Overloaded' : acRatio > 1.2 ? 'Elevated' : 'Balanced'}
-            </p>
-            <p className="text-sm text-muted-foreground mt-1">
-              {acRatio > 1.5 ? 'Training spike detected — ease off' : acRatio > 1.2 ? 'Slightly above optimal' : 'In the sweet spot'}
-            </p>
-          </div>
-        </div>
-
-        {/* Wearable metrics */}
-        {user && <WearableMetricsCard athleteId={user.id} phase={phase} />}
-
-        {/* AI Update + Risk Drivers */}
-        {user && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-            <AgentAdaptabilityCard athleteId={user.id} lastUpdated={lastAgentUpdate} planAdjusted={planAdjusted} />
-            <SimplifiedDrivers athleteId={user.id} />
-          </div>
-        )}
-
         {/* Goals */}
         {user && <GoalTracker athleteId={user.id} />}
 
-        {/* Plan Changes */}
-        {user && <PlanChanges athleteId={user.id} />}
-
         {/* Quick Actions */}
-        <div>
-          <h2 className="font-heading text-base sm:text-lg font-bold uppercase mb-3">Quick Actions</h2>
-          <div className="grid grid-cols-3 gap-2 sm:gap-3">
-            {quickActions.map(a => (
-              <Link key={a.path} to={a.path}
-                className="glass-card p-4 flex flex-col items-center gap-2 hover:bg-secondary/50 transition-colors group">
-                <a.icon className={`h-6 w-6 ${a.color} group-hover:scale-110 transition-transform`} />
-                <span className="text-xs font-medium text-center">{a.label}</span>
-              </Link>
-            ))}
-          </div>
+        <div className="grid grid-cols-3 gap-2">
+          {quickActions.map(a => (
+            <Link key={a.path} to={a.path}
+              className="glass-card p-3 flex flex-col items-center gap-1.5 hover:bg-secondary/50 transition-colors group">
+              <a.icon className="h-5 w-5 text-primary group-hover:scale-110 transition-transform" />
+              <span className="text-xs font-medium text-center">{a.label}</span>
+            </Link>
+          ))}
         </div>
 
         {/* Cycle setup prompt */}
         {phase === 'unknown' && (
-          <div className="glass-card p-6 border-primary/30">
-            <p className="font-bold mb-1">Complete your cycle setup</p>
-            <p className="text-sm text-muted-foreground mb-3">We need your cycle data to personalize your risk scores.</p>
-            <Link to="/cycle-setup" className="text-primary text-sm font-bold hover:underline">Set up now →</Link>
+          <div className="glass-card p-5 border-primary/30">
+            <p className="font-bold text-sm mb-1">Complete your cycle setup</p>
+            <p className="text-xs text-muted-foreground mb-2">We need your cycle data to personalize risk scores.</p>
+            <Link to="/cycle-setup" className="text-primary text-xs font-bold hover:underline">Set up now →</Link>
           </div>
         )}
       </div>
