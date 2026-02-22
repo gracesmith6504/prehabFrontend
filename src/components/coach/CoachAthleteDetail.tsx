@@ -49,6 +49,7 @@ export default function CoachAthleteDetail({ athleteId, athleteName, onBack }: P
   const [extraSessions, setExtraSessions] = useState<ExtraSession[]>([]);
   const [riskPredictionId, setRiskPredictionId] = useState<string | null>(null);
   const [rerunPending, setRerunPending] = useState(false);
+  const [autonomyLevel, setAutonomyLevel] = useState<string>('auto_adjust');
 
   // Debounced agent re-trigger: waits 8s after last override before firing
   const rerunTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -88,10 +89,11 @@ export default function CoachAthleteDetail({ athleteId, athleteName, onBack }: P
   };
 
   const loadPlan = async () => {
-    const [planRes, reportRes, predRes] = await Promise.all([
+    const [planRes, reportRes, predRes, profileRes] = await Promise.all([
       supabase.from('weekly_plans').select('*').eq('athlete_id', athleteId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('risk_reports').select('*').eq('athlete_id', athleteId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       supabase.from('risk_predictions').select('id').eq('athlete_id', athleteId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      supabase.from('athlete_profiles').select('autonomy_level').eq('user_id', athleteId).maybeSingle(),
     ]);
     if (planRes.data) {
       setPlan(planRes.data);
@@ -101,6 +103,7 @@ export default function CoachAthleteDetail({ athleteId, athleteName, onBack }: P
     }
     if (reportRes.data) setReport(reportRes.data);
     if (predRes.data) setRiskPredictionId(predRes.data.id);
+    if (profileRes.data) setAutonomyLevel((profileRes.data as any).autonomy_level || 'auto_adjust');
 
     // Fetch athlete extra sessions
     const { data: extras } = await supabase
@@ -187,13 +190,42 @@ export default function CoachAthleteDetail({ athleteId, athleteName, onBack }: P
 
   if (loading) return <div className="flex items-center justify-center h-32"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
 
+  const handleAutonomyChange = async (newLevel: string) => {
+    const { error } = await supabase
+      .from('athlete_profiles')
+      .update({ autonomy_level: newLevel } as any)
+      .eq('user_id', athleteId);
+    if (error) { toast.error('Failed to update autonomy level'); return; }
+    setAutonomyLevel(newLevel);
+    toast.success(`Autonomy level set to ${newLevel.replace('_', ' ')}`);
+  };
+
+  const autonomyBadgeColor = (level: string) => {
+    if (level === 'suggest_only') return 'bg-muted text-muted-foreground';
+    if (level === 'escalate') return 'bg-destructive/15 text-destructive';
+    return 'bg-primary/15 text-primary';
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="h-5 w-5" /></Button>
-        <div>
+        <div className="flex-1">
           <h2 className="text-2xl font-heading font-bold">{athleteName}</h2>
           {report && <div className="flex items-center gap-2 mt-1"><RiskBadge level={report.risk_level} /><span className="text-sm text-muted-foreground">Score: {report.risk_score}</span></div>}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">Autonomy:</span>
+          <Select value={autonomyLevel} onValueChange={handleAutonomyChange}>
+            <SelectTrigger className="w-36 h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="suggest_only">Suggest Only</SelectItem>
+              <SelectItem value="auto_adjust">Auto-Adjust</SelectItem>
+              <SelectItem value="escalate">Escalate All</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 

@@ -6,9 +6,7 @@ import RiskBadge from '@/components/RiskBadge';
 import FeedbackButtons from '@/components/FeedbackButtons';
 import SessionLogDialog from '@/components/SessionLogDialog';
 import ExtraSessionDialog from '@/components/ExtraSessionDialog';
-import {
-  generateDefaultPlan, adjustPlan, type PlanSession,
-} from '@/lib/riskEngine';
+import { type PlanSession } from '@/lib/riskEngine';
 import { ClipboardList, ChevronLeft, ChevronRight, Bot, ShieldCheck, CheckCircle2, Plus, User, Edit3, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
@@ -154,9 +152,18 @@ export default function PlanView() {
       }
 
       const isCoachPlan = (savedPlan?.plan_owner_type || 'athlete') === 'coach';
+      const defaultBasePlan: PlanSession[] = [
+        { day: 'Monday', type: 'Strength', intensity: 'Medium', duration: 60 },
+        { day: 'Tuesday', type: 'Sprint', intensity: 'High', duration: 45 },
+        { day: 'Wednesday', type: 'Recovery', intensity: 'Low', duration: 30 },
+        { day: 'Thursday', type: 'Plyometrics', intensity: 'High', duration: 50 },
+        { day: 'Friday', type: 'Match', intensity: 'High', duration: 90 },
+        { day: 'Saturday', type: 'Recovery', intensity: 'Low', duration: 30 },
+        { day: 'Sunday', type: 'Rest', intensity: 'Low', duration: 0 },
+      ];
       const basePlan = savedPlan?.original_plan
         ? (savedPlan.original_plan as unknown as PlanSession[])
-        : generateDefaultPlan();
+        : defaultBasePlan;
       setOriginal(basePlan);
 
       // Use saved adjusted plan and explanation from DB when available
@@ -164,21 +171,20 @@ export default function PlanView() {
         setAdjusted(savedPlan.adjusted_plan as unknown as PlanSession[]);
         setExplanation(savedPlan.explanation || (isCoachPlan ? 'This plan was assigned by your coach.' : 'AI-adjusted plan based on your risk profile.'));
       } else {
-        // Fallback: generate locally using DB risk score
-        const result = adjustPlan(basePlan, dbRiskScore);
-        setAdjusted(result.adjusted);
-        setExplanation(savedPlan?.explanation || 'Plan adjusted based on your current risk level.');
+        // No adjusted plan available — show base plan unmodified
+        setAdjusted(basePlan);
+        setExplanation(savedPlan?.explanation || 'Awaiting agent analysis — showing base plan.');
       }
 
       if (!savedPlan) {
-        const result = adjustPlan(basePlan, dbRiskScore);
+        // Create a base plan entry without local adjustments
         const { data: newPlan } = await supabase.from('weekly_plans').insert({
           athlete_id: user.id,
           original_plan: basePlan as any,
-          adjusted_plan: result.adjusted as any,
+          adjusted_plan: basePlan as any,
           risk_score: dbRiskScore,
           risk_level: dbRiskLevel,
-          explanation: 'Plan adjusted based on your current risk level.',
+          explanation: 'Awaiting agent analysis.',
         }).select('id').maybeSingle();
         if (newPlan) setWeeklyPlanId(newPlan.id);
       }
