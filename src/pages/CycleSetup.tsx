@@ -6,7 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { getCurrentPhase, type MenstrualPhase } from '@/lib/riskEngine';
 import { Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 import CycleRing from '@/components/CycleRing';
-import PhaseInsight from '@/components/PhaseInsight';
+import PhaseEducation from '@/components/PhaseEducation';
 import WearableCycleSync from '@/components/WearableCycleSync';
 import { Switch } from '@/components/ui/switch';
 import { format } from 'date-fns';
@@ -132,7 +132,7 @@ export default function CycleSetup() {
                 cycleLength={cycleLength}
                 menstruationLength={menstruationLength}
               />
-              <PhaseInsight phase={currentPhase} />
+              <PhaseEducation phase={currentPhase} />
             </>
           ) : (
             <div className="text-center py-8 space-y-3">

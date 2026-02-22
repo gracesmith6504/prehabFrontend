@@ -515,13 +515,7 @@ function defaultPlan() {
   ];
 }
 
-function adjustPlanByAutonomy(original: any[], riskScore: number, autonomyLevel: string, planLocked: boolean, intensityMultiplier: number = 1.0) {
-  // If suggest_only or escalate, don't modify plan
-  if (autonomyLevel === "suggest_only" || autonomyLevel === "escalate" || planLocked) {
-    return { adjusted: original.map((s: any) => ({ ...s })), changes: [] as string[], planModified: false };
-  }
-
-  // auto_adjust: apply risk-based adjustments
+function adjustPlanByRules(original: any[], riskScore: number): { adjusted: any[]; changes: string[]; planModified: boolean } {
   const adjusted = original.map((s: any) => ({ ...s }));
   const changes: string[] = [];
 
@@ -558,6 +552,185 @@ function adjustPlanByAutonomy(original: any[], riskScore: number, autonomyLevel:
   }
 
   return { adjusted, changes, planModified: changes.length > 0 };
+}
+
+// ============================================
+// AGENT TOOL: Gemini-powered plan adjustments
+// ============================================
+
+async function adjustPlanWithGemini(
+  original: any[],
+  context: {
+    riskScore: number;
+    riskLevel: string;
+    phaseName: string;
+    acr: number;
+    latestSore: any;
+    topDrivers: any[];
+    mlRecommendations: string[];
+    predictionTrend: string;
+    goalInfluence: { shouldReduceLoad: boolean; shouldIncreaseRecovery: boolean; goalContext: string[] };
+    intensityMultiplier: number;
+    sessions7d: any[];
+  }
+): Promise<{ adjusted: any[]; changes: string[]; planModified: boolean }> {
+  const apiKey = Deno.env.get("LOVABLE_API_KEY");
+  if (!apiKey) {
+    console.warn("[GEMINI] No API key — falling back to rules");
+    return adjustPlanByRules(original, context.riskScore);
+  }
+
+  const sorenessDesc = context.latestSore
+    ? `Knee: ${context.latestSore.knee}/10, Hamstring: ${context.latestSore.hamstring}/10, Groin: ${context.latestSore.groin}/10, Calf: ${context.latestSore.calf}/10`
+    : "No recent soreness data";
+
+  const recent7d = context.sessions7d.slice(-7).map((s: any) =>
+    `${s.date}: ${s.session_type || s.type} (${s.intensity}, ${s.duration}min, RPE ${s.rpe})`
+  ).join("\n") || "No recent sessions";
+
+  const prompt = `You are an elite sports physiotherapist and performance coach specialising in female athlete injury prevention.
+
+ATHLETE CONTEXT:
+- Injury risk score: ${context.riskScore}/100 (${context.riskLevel})
+- Menstrual cycle phase: ${context.phaseName}
+- Acute:chronic workload ratio: ${context.acr.toFixed(2)} (safe zone: 0.8–1.3)
+- Risk trend: ${context.predictionTrend}
+- Current soreness: ${sorenessDesc}
+- Top risk drivers: ${context.topDrivers.slice(0, 5).map((d: any) => `${d.label || d.feature} (${(d.contribution * 100).toFixed(0)}%)`).join(", ")}
+- ML model recommendations: ${context.mlRecommendations.length ? context.mlRecommendations.join("; ") : "None"}
+- Active goals: ${context.goalInfluence.goalContext.length ? context.goalInfluence.goalContext.join("; ") : "None"}
+
+LAST 7 DAYS TRAINING:
+${recent7d}
+
+CURRENT PLAN (Mon–Sun):
+${original.map(s => `${s.day}: ${s.type} | ${s.intensity} | ${s.duration}min${s.notes ? ` | ${s.notes}` : ""}`).join("\n")}
+
+ADJUSTMENT RULES:
+1. If risk is Low (0-40): minimal changes. Only adjust if ACR is outside 0.8–1.3 or soreness is high in specific areas.
+2. If risk is Medium (41-70): reduce high-intensity volume by 20-40%, add targeted prehab/mobility, consider phase-specific adaptations.
+3. If risk is High (71-100): replace high-risk sessions with recovery/prehab, protect match days with reduced pre-match load.
+4. During menstruation: reduce plyometric volume, favour strength endurance over maximal power.
+5. During luteal phase: reduce sprint volume, increase recovery time, lower overall intensity if soreness is elevated.
+6. If ACR > 1.5: aggressively reduce load. If ACR < 0.7: cautiously increase to avoid detraining.
+7. Never remove all training — maintain movement quality. Replace, don't eliminate.
+8. If specific body parts show high soreness, avoid exercises loading those areas.
+9. Preserve match days unless risk is critically high (>85).
+10. Apply intensity multiplier of ${context.intensityMultiplier} to any changes (1.0 = full adjustment, 0.5 = half).
+
+Return the adjusted 7-day plan using the tool provided. For each day you modify, include a brief clinical reason. Do NOT change days that don't need adjustment.`;
+
+  try {
+    const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-3-flash-preview",
+        messages: [
+          { role: "system", content: "You are an expert sports physiotherapist AI. Always use the provided tool to return structured plan adjustments." },
+          { role: "user", content: prompt },
+        ],
+        tools: [{
+          type: "function",
+          function: {
+            name: "adjust_training_plan",
+            description: "Return the adjusted weekly training plan with reasoning for each change.",
+            parameters: {
+              type: "object",
+              properties: {
+                sessions: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      day: { type: "string", enum: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] },
+                      type: { type: "string", description: "Session type: Strength, Sprint, Recovery, Plyometrics, Match, Rest, Mobility, Prehab, Conditioning, Yoga" },
+                      intensity: { type: "string", enum: ["Low", "Medium", "High"] },
+                      duration: { type: "number", description: "Duration in minutes (0 for Rest)" },
+                      notes: { type: "string", description: "Brief clinical reasoning if changed, or empty if unchanged" },
+                    },
+                    required: ["day", "type", "intensity", "duration"],
+                    additionalProperties: false,
+                  },
+                },
+                changes_summary: {
+                  type: "array",
+                  items: { type: "string" },
+                  description: "List of human-readable change descriptions, e.g. 'Thursday: Replaced Plyometrics with Mobility — elevated hamstring soreness'",
+                },
+              },
+              required: ["sessions", "changes_summary"],
+              additionalProperties: false,
+            },
+          },
+        }],
+        tool_choice: { type: "function", function: { name: "adjust_training_plan" } },
+        max_tokens: 1000,
+      }),
+    });
+
+    if (!resp.ok) {
+      const status = resp.status;
+      console.warn(`[GEMINI] Plan adjustment failed (${status}) — falling back to rules`);
+      return adjustPlanByRules(original, context.riskScore);
+    }
+
+    const data = await resp.json();
+    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+    if (!toolCall?.function?.arguments) {
+      console.warn("[GEMINI] No tool call in response — falling back to rules");
+      return adjustPlanByRules(original, context.riskScore);
+    }
+
+    const parsed = typeof toolCall.function.arguments === "string"
+      ? JSON.parse(toolCall.function.arguments)
+      : toolCall.function.arguments;
+
+    const geminiSessions = parsed.sessions || [];
+    const changes = parsed.changes_summary || [];
+
+    // Merge Gemini output with original plan (preserve any days Gemini didn't return)
+    const adjusted = original.map((orig: any) => {
+      const geminiDay = geminiSessions.find((g: any) => g.day === orig.day);
+      if (geminiDay) {
+        return {
+          day: orig.day,
+          type: geminiDay.type || orig.type,
+          intensity: geminiDay.intensity || orig.intensity,
+          duration: typeof geminiDay.duration === "number" ? geminiDay.duration : orig.duration,
+          notes: geminiDay.notes || undefined,
+        };
+      }
+      return { ...orig };
+    });
+
+    // Determine if plan was actually modified
+    const planModified = original.some((orig: any, i: number) => {
+      const adj = adjusted[i];
+      return orig.type !== adj.type || orig.intensity !== adj.intensity || orig.duration !== adj.duration;
+    });
+
+    console.log(`[GEMINI] Plan adjustment complete: ${changes.length} changes, modified=${planModified}`);
+    return { adjusted, changes, planModified };
+  } catch (err: any) {
+    console.warn(`[GEMINI] Plan adjustment error: ${err.message} — falling back to rules`);
+    return adjustPlanByRules(original, context.riskScore);
+  }
+}
+
+function adjustPlanByAutonomy(
+  original: any[], riskScore: number, autonomyLevel: string,
+  planLocked: boolean, _intensityMultiplier: number = 1.0
+) {
+  // If suggest_only or escalate, don't modify plan
+  if (autonomyLevel === "suggest_only" || autonomyLevel === "escalate" || planLocked) {
+    return { adjusted: original.map((s: any) => ({ ...s })), changes: [] as string[], planModified: false };
+  }
+  // For auto_adjust: use rules as synchronous fallback only
+  return adjustPlanByRules(original, riskScore);
 }
 
 // ============================================
@@ -949,26 +1122,36 @@ Deno.serve(async (req: Request) => {
 
       const planLocked = existingPlan?.locked_by_coach === true;
       const basePlan = existingPlan?.original_plan || defaultPlan();
-      let { adjusted, changes, planModified } = adjustPlanByAutonomy(
-        basePlan as any[], riskScore, effectiveAutonomy, planLocked, intensityMultiplier
-      );
 
-      // Evaluate goals and apply goal-aware influence
+      // Evaluate goals first so we can pass goal context to Gemini
       const goalResults = await evaluateGoals(supabase, runId, state.uid, riskScore, state);
       const goalInfluence = getGoalInfluence(goalResults);
 
-      // Apply goal-driven plan adjustments (only if auto_adjust and not locked)
-      if (effectiveAutonomy === "auto_adjust" && !planLocked && (goalInfluence.shouldReduceLoad || goalInfluence.shouldIncreaseRecovery)) {
-        adjusted.forEach((s: any) => {
-          if (goalInfluence.shouldReduceLoad && s.intensity === "High" && s.type !== "Match") {
-            if (!changes.some(c => c.includes(s.day))) {
-              changes.push(`Goal-driven: Reduced ${s.type} intensity (${s.day}) to Medium`);
-              s.intensity = "Medium";
-              s.notes = (s.notes ? s.notes + " | " : "") + "Intensity lowered to pursue goal";
-              planModified = true;
-            }
-          }
+      let adjusted: any[], changes: string[], planModified: boolean;
+
+      if (effectiveAutonomy === "auto_adjust" && !planLocked) {
+        // Use Gemini-powered intelligent plan adjustments
+        const geminiResult = await adjustPlanWithGemini(basePlan as any[], {
+          riskScore,
+          riskLevel,
+          phaseName: state.phaseName,
+          acr: state.acr,
+          latestSore: state.latestSore,
+          topDrivers,
+          mlRecommendations: mlResponse.recommended_actions || [],
+          predictionTrend: memory.predictionTrend,
+          goalInfluence,
+          intensityMultiplier,
+          sessions7d: state.sessions,
         });
+        adjusted = geminiResult.adjusted;
+        changes = geminiResult.changes;
+        planModified = geminiResult.planModified;
+      } else {
+        // suggest_only / escalate / locked — don't modify
+        adjusted = (basePlan as any[]).map((s: any) => ({ ...s }));
+        changes = [];
+        planModified = false;
       }
 
       // Build explanation — use Gemini for coach-friendly narrative
