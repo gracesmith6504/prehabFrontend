@@ -915,20 +915,19 @@ Deno.serve(async (req: Request) => {
       }
       const templateExplanation = templateParts.join(" ");
 
-      // Generate Gemini-powered explanation
-      const geminiPrompt = `Summarize this athlete's risk assessment for their coach in 2-4 plain-language sentences.
+      // Generate Gemini-powered explanation (athlete-facing, empathetic tone)
+      const geminiPrompt = `You are writing a short personal message (2-3 sentences) directly to a female athlete about her current injury risk. Use "you/your" language. Be warm, supportive, and specific about what's happening and what's being done to help. Do NOT repeat raw numbers or technical terms like "acute:chronic ratio". Instead, translate the data into plain, encouraging language.
 
-Risk score: ${riskScore}/100 (${riskLevel})
-Phase: ${state.phaseName}
-Acute:Chronic ratio: ${state.acr.toFixed(2)}
-Confidence: ${(confidence * 100).toFixed(0)}%
-Trend: ${memory.predictionTrend} (last 3 scores: ${memory.last3Scores.join(", ")})
-Top risk factors: ${topDrivers.slice(0, 3).map((d: any) => d.label || d.feature).join(", ")}
-ML explanation: ${mlResponse.explanation || "none"}
-Recommended actions: ${mlResponse.recommended_actions?.join("; ") || "none"}
-Plan changes: ${changes.length ? changes.join("; ") : "none"}
-Active goals: ${goalResults.map((g: any) => `${g.metric_type} ${g.direction} → ${g.progress_pct}% progress`).join("; ") || "none"}
-${templateExplanation ? `Context: ${templateExplanation}` : ""}`;
+Data (do not expose these numbers directly):
+- Risk score: ${riskScore}/100 (${riskLevel})
+- Cycle phase: ${state.phaseName}
+- Training load ratio: ${state.acr.toFixed(2)}
+- Trend: ${memory.predictionTrend} (recent scores: ${memory.last3Scores.join(", ")})
+- Key factors: ${topDrivers.slice(0, 3).map((d: any) => d.label || d.feature).join(", ")}
+- Plan adjustments made: ${changes.length ? changes.join("; ") : "none"}
+- Active goals: ${goalResults.map((g: any) => `${g.metric_type} ${g.direction} → ${g.progress_pct}% progress`).join("; ") || "none"}
+
+Write the message now:`;
 
       const geminiExplanation = await callGemini(geminiPrompt);
       const explanation = geminiExplanation || templateExplanation || `Risk ${riskLevel} (score: ${riskScore}).`;
