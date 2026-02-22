@@ -90,7 +90,7 @@ export default function AgentAdaptabilityCard({ athleteId, lastUpdated, planAdju
     <div className="glass-card p-5 space-y-3">
       <div className="flex items-center gap-2">
         <Brain className="h-5 w-5 text-primary" />
-        <h3 className="font-heading font-bold text-sm uppercase tracking-wider">Agent Behaviour</h3>
+        <h3 className="font-heading font-bold text-sm uppercase tracking-wider">Smart Adjustments</h3>
         {isAdapted && (
           <span className="ml-auto text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">
             Adapted
