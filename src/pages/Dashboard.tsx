@@ -6,7 +6,7 @@ import AppLayout from '@/components/AppLayout';
 import RiskGauge from '@/components/RiskGauge';
 import RiskBadge from '@/components/RiskBadge';
 import TodaysSession from '@/components/TodaysSession';
-import AIUpdateCard from '@/components/AIUpdateCard';
+import AgentAdaptabilityCard from '@/components/AgentAdaptabilityCard';
 import SimplifiedDrivers from '@/components/SimplifiedDrivers';
 import PlanChanges from '@/components/PlanChanges';
 import GoalTracker from '@/components/GoalTracker';
@@ -272,7 +272,7 @@ export default function Dashboard() {
         {/* AI Update + Risk Drivers */}
         {user && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-            <AIUpdateCard lastUpdated={lastAgentUpdate} planAdjusted={planAdjusted} />
+            <AgentAdaptabilityCard athleteId={user.id} lastUpdated={lastAgentUpdate} planAdjusted={planAdjusted} />
             <SimplifiedDrivers athleteId={user.id} />
           </div>
         )}

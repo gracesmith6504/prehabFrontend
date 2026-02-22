@@ -61,7 +61,7 @@ export default function Auth() {
       >
         <Link to="/" className="flex items-center gap-2 mb-8 justify-center">
           <Activity className="h-6 w-6 text-primary" />
-          <span className="font-heading text-lg font-bold uppercase tracking-wider">CycleAgent</span>
+          <span className="font-heading text-lg font-bold uppercase tracking-wider">PREHAB</span>
         </Link>
 
         <h2 className="font-heading text-2xl font-bold text-center mb-6">
