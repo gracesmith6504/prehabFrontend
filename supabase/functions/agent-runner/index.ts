@@ -212,7 +212,7 @@ async function recordPaidSignal(
   const orderId = `order_${athleteId}_${new Date().toISOString().slice(0, 7).replace("-", "")}`;
 
   try {
-    const resp = await fetch("https://api.paid.ai/v0/signals", {
+    const resp = await fetch("https://api.agentpaid.io/api/v1/usage/v2/signals/bulk", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
