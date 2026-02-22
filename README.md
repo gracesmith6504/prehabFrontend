@@ -1,73 +1,112 @@
-# Welcome to your Lovable project
+# PREHAB — AI-Powered Injury Prevention for Female Athletes
 
-## Project info
+PREHAB is a cycle-aware training optimisation platform that uses an autonomous AI agent to predict injury risk, adapt weekly training plans, and escalate to coaches — all informed by menstrual cycle phase, wearable data, and evidence-based sports science.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+Built for HackEurope 2026.
 
-## How can I edit this code?
+---
 
-There are several ways of editing your application.
+## What it does
 
-**Use Lovable**
+- **Injury risk scoring** — ML model (XGBoost) predicts injury probability from training load, soreness, RPE, and cycle phase
+- **Cycle-aware plan adjustment** — autonomous agent adapts session intensity and duration based on menstrual phase multipliers (menstruation 0.72×, luteal 0.88×, ovulatory 1.12×)
+- **Coach escalation loop** — high-risk athletes are automatically flagged to their coach with an explanation; coaches can accept, modify, or reject the plan change, feeding back into the agent's policy
+- **Agent adaptability** — the agent tracks feedback over time and shifts between Full Autonomy, Dampened, and Suggest-Only modes based on coach acceptance rate
+- **Samsung Health integration** — syncs cycle data and simulates activity metrics (steps, active minutes, calories) in Samsung Health's visual style
+- **Scientific evidence base** — all risk factors are backed by peer-reviewed citations served from a live `/evidence` endpoint
+- **Usage-based billing** — every autonomous agent action emits a signal to Paid.ai, enabling per-adjustment revenue tracking
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+---
 
-Changes made via Lovable will be committed automatically to this repo.
+## Tech stack
 
-**Use your preferred IDE**
+| Layer | Technology |
+|---|---|
+| Frontend | React 18 + TypeScript + Vite |
+| UI | shadcn/ui + Tailwind CSS |
+| Backend | Supabase (PostgreSQL + Auth + Edge Functions) |
+| AI | Google Gemini (plan explanations) + XGBoost (risk scoring) |
+| Wearables | Samsung Health simulation API (Cloud Run) |
+| Billing | Paid.ai usage signals |
+| Deployment | Lovable (frontend) + Supabase (backend) |
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+---
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## Architecture
 
-Follow these steps:
+```
+Athlete app  ──►  Supabase DB  ◄──  agent-runner (Edge Function)
+                                          │
+                              ┌───────────┴───────────┐
+                              ▼                       ▼
+                        risk_predictions        weekly_plans
+                        risk_reports            agent_runs
+                        escalations             feedback_events
+                              │
+                              ▼
+                        paid-signal (Edge Function)
+                              │
+                              ▼
+                          Paid.ai API
+```
+
+**Agent loop (runs on schedule or manual trigger):**
+1. OBSERVE — fetch training sessions, soreness, cycle phase, wearable data
+2. THINK — score injury risk via ML, compute AC ratio
+3. ACT — adjust weekly plan if risk is elevated
+4. LOG — write risk prediction, report, and plan to DB; emit Paid.ai signal
+5. REFLECT — evaluate coach feedback history, update `athlete_agent_state` policy
+
+---
+
+## Supabase edge functions
+
+| Function | Purpose |
+|---|---|
+| `agent-runner` | Main agentic loop — risk scoring, plan adjustment, escalation, Paid.ai signals |
+| `paid-signal` | Validates and forwards usage economics to Paid.ai API |
+| `seed-demo-data` | Seeds realistic demo athlete data for presentations |
+
+---
+
+## Key environment variables
+
+```env
+VITE_SUPABASE_URL=
+VITE_SUPABASE_PUBLISHABLE_KEY=
+VITE_SUPABASE_PROJECT_ID=
+```
+
+Supabase secrets (set via `supabase secrets set`):
+```
+PAID_API_KEY=        # Paid.ai API key for usage billing
+GEMINI_API_KEY=      # Google Gemini for plan explanations
+```
+
+---
+
+## Local development
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+git clone https://github.com/gracesmith6504/prehabFrontend
+cd prehabFrontend
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Pushing to `main` auto-deploys to Lovable.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+---
 
-**Use GitHub Codespaces**
+## Pages
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+| Route | Description |
+|---|---|
+| `/` | Dashboard — risk gauge, Samsung Health rings, agent behaviour card |
+| `/risk-report` | Athlete risk report with ML explanation and evidence citations |
+| `/plan` | Weekly training plan with agent adjustments highlighted |
+| `/cycle-setup` | Cycle configuration + Samsung Health sync |
+| `/coach` | Coach dashboard — squad risk overview |
+| `/coach/escalations` | Active escalations with accept/modify/reject workflow |
+| `/coach/plans` | Per-athlete plan management |
+| `/goals` | Goal tracker |
