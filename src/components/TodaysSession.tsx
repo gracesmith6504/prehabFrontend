@@ -78,7 +78,7 @@ export default function TodaysSession({ session, athleteId, existingLog, onLogge
 
         {isCompleted ? (
           <div className="flex items-center flex-wrap gap-3 sm:gap-4 text-sm text-muted-foreground">
-            <span>RPE: <strong className="text-foreground">{existingLog.rpe}/10</strong></span>
+            <span>Effort: <strong className="text-foreground">{existingLog.rpe}/10</strong></span>
             <span>Actual: <strong className="text-foreground">{existingLog.duration} min</strong></span>
             <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setDialogOpen(true)}>
               Edit Log

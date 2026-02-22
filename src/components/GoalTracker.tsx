@@ -25,8 +25,8 @@ interface Goal {
 
 const METRIC_LABELS: Record<string, string> = {
   risk_score: 'Risk Score',
-  acr: 'Acute:Chronic Ratio',
-  weekly_load: 'Weekly Load',
+  acr: 'Training Load Ratio',
+  weekly_load: 'Weekly Training Volume',
 };
 
 const DIRECTION_ICONS: Record<string, typeof TrendingDown> = {

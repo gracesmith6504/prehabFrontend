@@ -13,6 +13,20 @@ interface Props {
   drivers?: RiskDriver[]; // optionally pass drivers directly
 }
 
+const DRIVER_LABELS: Record<string, string> = {
+  ac_ratio: 'Training Load Spike',
+  acute_chronic_ratio: 'Training Load Spike',
+  phase_multiplier: 'Cycle Phase Risk',
+  soreness: 'Soreness Level',
+  soreness_contribution: 'Soreness Level',
+  rpe: 'Perceived Effort',
+  session_rpe: 'Perceived Effort',
+  duration: 'Session Length',
+  menstrual_phase: 'Cycle Phase',
+  weekly_load: 'Training Volume',
+  risk_prob: 'Injury Probability',
+  confidence: 'Model Confidence',
+};
 export default function TopDrivers({ athleteId, drivers: propDrivers }: Props) {
   const [drivers, setDrivers] = useState<RiskDriver[]>(propDrivers || []);
 
@@ -46,10 +60,9 @@ export default function TopDrivers({ athleteId, drivers: propDrivers }: Props) {
         {drivers.slice(0, 3).map((d, i) => (
           <div key={i} className="space-y-1">
             <div className="flex items-center justify-between text-sm">
-              <span className="font-medium">{d.feature}</span>
+              <span className="font-medium">{DRIVER_LABELS[d.feature] || d.feature.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
               <span className="text-muted-foreground text-xs">
-                {typeof d.value === 'number' ? (d.value as number).toFixed(2) : d.value}
-                {' • '}{(d.contribution * 100).toFixed(0)}%
+                {(d.contribution * 100).toFixed(0)}% impact
               </span>
             </div>
             <div className="h-2 rounded-full bg-secondary overflow-hidden">
