@@ -1,12 +1,13 @@
 import { motion } from 'framer-motion';
 
 export default function RiskGauge({ score }: { score: number }) {
-  const isHigh = score > 80;
-  const isMedium = score > 60;
-  const color = isHigh ? 'hsl(0, 72%, 51%)' : isMedium ? 'hsl(45, 93%, 47%)' : 'hsl(145, 65%, 42%)';
+  const isCritical = score >= 75;
+  const isHigh = score >= 55;
+  const isMedium = score >= 35;
+  const color = isCritical ? 'hsl(0, 72%, 51%)' : isHigh ? 'hsl(25, 90%, 50%)' : isMedium ? 'hsl(45, 93%, 47%)' : 'hsl(145, 65%, 42%)';
   const circumference = 2 * Math.PI * 54;
   const offset = circumference - (score / 100) * circumference;
-  const glowFilter = isHigh ? `drop-shadow(0 0 4px hsl(0 72% 51% / 0.35))` : 'none';
+  const glowFilter = isCritical ? `drop-shadow(0 0 4px hsl(0 72% 51% / 0.35))` : 'none';
 
   return (
     <div className="relative w-28 h-28 mx-auto">

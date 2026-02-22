@@ -199,8 +199,8 @@ export default function Dashboard() {
           </Tooltip>
         </div>
 
-        {/* High risk alert */}
-        {riskLevel === 'High' && (
+        {/* Critical risk alert */}
+        {(riskLevel === 'Critical' || riskLevel === 'High') && (
           <motion.div
             className="flex items-center gap-3 p-4 rounded-xl bg-destructive/10 border border-destructive/30"
             initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}

@@ -47,7 +47,7 @@ export default function AthleteTable({ athletes, onSelectAthlete }: Props) {
               <TableCell className="font-medium">{a.full_name || a.email}</TableCell>
               <TableCell className="text-center">
                 <span className={`font-heading font-bold text-lg ${
-                  a.risk_score >= 75 ? 'text-destructive' : a.risk_score >= 50 ? 'risk-medium' : 'text-primary'
+                  a.risk_score >= 75 ? 'risk-critical' : a.risk_score >= 55 ? 'risk-high' : a.risk_score >= 35 ? 'risk-medium' : 'text-primary'
                 }`}>{a.risk_score}</span>
               </TableCell>
               <TableCell className="text-center"><RiskBadge level={a.risk_level} /></TableCell>
