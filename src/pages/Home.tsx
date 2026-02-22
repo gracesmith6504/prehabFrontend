@@ -129,6 +129,86 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ── Pricing ── */}
+      <section className="py-20 md:py-28 border-t border-border">
+        <div className="container max-w-5xl">
+          <motion.p {...fade} className="text-primary text-xs font-bold uppercase tracking-[0.2em] mb-3 text-center">Agent-Native Pricing</motion.p>
+          <motion.h2 {...fade} className="text-2xl md:text-3xl font-heading font-bold text-center mb-4">
+            PAY FOR <span className="text-primary">AI WORK DONE</span> — NOT SEATS.
+          </motion.h2>
+          <motion.p {...fade} className="text-muted-foreground text-sm text-center max-w-lg mx-auto mb-14">
+            We charge for autonomous clinical work completed — not dashboards or user counts.
+          </motion.p>
+
+          <div className="grid md:grid-cols-2 gap-6 mb-10">
+            {/* Athlete Plan */}
+            <motion.div {...fade} className="glass-card p-8 flex flex-col">
+              <div className="flex items-center gap-2 mb-1">
+                <Activity className="h-5 w-5 text-primary" />
+                <span className="text-xs font-bold uppercase tracking-wider text-primary">Athlete Plan</span>
+              </div>
+              <div className="flex items-baseline gap-1 mb-5">
+                <span className="text-4xl font-heading font-bold">€29</span>
+                <span className="text-muted-foreground text-sm">/ month</span>
+              </div>
+              <ul className="space-y-2.5 text-sm text-muted-foreground flex-1">
+                <li className="flex gap-2"><span className="text-primary">✓</span>Continuous monitoring</li>
+                <li className="flex gap-2"><span className="text-primary">✓</span>Up to 10 autonomous interventions (plan adjustments + escalations)</li>
+                <li className="flex gap-2"><span className="text-primary">✓</span>Additional interventions at €3 each</li>
+              </ul>
+              <Link to="/auth?mode=signup" className="mt-6 inline-flex items-center justify-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-bold rounded-lg hover:brightness-110 transition-all text-sm">
+                Get Started <ArrowRight className="h-4 w-4" />
+              </Link>
+            </motion.div>
+
+            {/* Coach Plan */}
+            <motion.div {...fade} transition={{ delay: 0.1 }} className="glass-card p-8 flex flex-col relative overflow-hidden">
+              <div className="absolute top-4 right-4 bg-primary text-primary-foreground text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full">Popular</div>
+              <div className="flex items-center gap-2 mb-1">
+                <Users className="h-5 w-5 text-primary" />
+                <span className="text-xs font-bold uppercase tracking-wider text-primary">Coach Plan</span>
+              </div>
+              <div className="flex items-baseline gap-1 mb-5">
+                <span className="text-4xl font-heading font-bold">€79</span>
+                <span className="text-muted-foreground text-sm">/ month</span>
+              </div>
+              <ul className="space-y-2.5 text-sm text-muted-foreground flex-1">
+                <li className="flex gap-2"><span className="text-primary">✓</span>Up to 15 athletes</li>
+                <li className="flex gap-2"><span className="text-primary">✓</span>40 shared autonomous interventions</li>
+                <li className="flex gap-2"><span className="text-primary">✓</span>Additional interventions at €3 each</li>
+              </ul>
+              <Link to="/auth?mode=signup" className="mt-6 inline-flex items-center justify-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-bold rounded-lg hover:brightness-110 transition-all text-sm">
+                Get Started <ArrowRight className="h-4 w-4" />
+              </Link>
+            </motion.div>
+          </div>
+
+          {/* Unit Economics callout */}
+          <motion.div {...fade} className="glass-card p-6 grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+            <div>
+              <p className="text-lg font-heading font-bold text-primary">~€0.05</p>
+              <p className="text-xs text-muted-foreground">AI compute cost</p>
+            </div>
+            <div>
+              <p className="text-lg font-heading font-bold text-primary">€20–€30</p>
+              <p className="text-xs text-muted-foreground">Human equivalent</p>
+            </div>
+            <div>
+              <p className="text-lg font-heading font-bold text-primary">€3</p>
+              <p className="text-xs text-muted-foreground">Customer price</p>
+            </div>
+            <div>
+              <p className="text-lg font-heading font-bold text-primary">7–10×</p>
+              <p className="text-xs text-muted-foreground">ROI per intervention</p>
+            </div>
+          </motion.div>
+
+          <motion.p {...fade} className="text-center text-sm font-medium text-muted-foreground mt-8 max-w-lg mx-auto">
+            PREHAB monetizes measurable AI work, proving economic value for every action performed.
+          </motion.p>
+        </div>
+      </section>
+
       {/* ── CTA ── */}
       <section className="py-20 border-t border-border">
         <div className="container max-w-xl text-center">
