@@ -258,7 +258,7 @@ export default function CoachAthleteDetail({ athleteId, athleteName, onBack }: P
             <p className="font-heading font-bold capitalize text-lg">{report.phase || 'Unknown'}</p>
           </div>
           <div className="glass-card p-4 text-center">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider">ACR</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">Load Ratio</p>
             <p className={`font-heading font-bold text-lg ${report.acute_chronic_ratio > 1.5 ? 'text-destructive' : ''}`}>{report.acute_chronic_ratio?.toFixed(2) ?? '—'}</p>
           </div>
           <div className="glass-card p-4 text-center">

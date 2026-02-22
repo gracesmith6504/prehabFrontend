@@ -255,7 +255,7 @@ export default function Dashboard() {
             <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Current Phase</p>
             <p className="text-xl sm:text-2xl font-heading font-bold capitalize text-primary">{phase}</p>
             <p className="text-sm text-muted-foreground mt-1">
-              Risk factor: ×{PHASE_MULTIPLIERS[phase].toFixed(1)}
+              {PHASE_MULTIPLIERS[phase] >= 1.2 ? 'Higher injury risk in this phase' : PHASE_MULTIPLIERS[phase] >= 1.1 ? 'Slightly elevated risk' : 'Lower risk in this phase'}
             </p>
             {phase !== 'unknown' && (
               <Link
@@ -272,10 +272,10 @@ export default function Dashboard() {
           <div className="glass-card p-4 sm:p-5">
             <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Training Load</p>
             <p className={`text-xl sm:text-2xl font-heading font-bold ${acRatio > 1.5 ? 'risk-high' : acRatio > 1.2 ? 'risk-medium' : 'risk-low'}`}>
-              {acRatio.toFixed(2)}
+              {acRatio > 1.5 ? 'Overloaded' : acRatio > 1.2 ? 'Elevated' : 'Balanced'}
             </p>
             <p className="text-sm text-muted-foreground mt-1">
-              {acRatio > 1.5 ? 'Spike detected — ease off' : acRatio > 1.2 ? 'Slightly elevated' : 'In the sweet spot'}
+              {acRatio > 1.5 ? 'Training spike detected — ease off' : acRatio > 1.2 ? 'Slightly above optimal' : 'In the sweet spot'}
             </p>
           </div>
         </div>
