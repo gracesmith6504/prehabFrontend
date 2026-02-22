@@ -131,6 +131,15 @@ export default function CoachAthleteDetail({ athleteId, athleteName, onBack }: P
       new_values: newVals || {},
       reason: reason || null,
     });
+
+    // Fire-and-forget Paid.ai signal for coach override
+    supabase.functions.invoke('paid-signal', {
+      body: {
+        event_name: `coach_override_${overrideType}`,
+        athlete_id: athleteId,
+        details: { override_type: overrideType, session_day: sessionDay || null },
+      },
+    }).catch(() => {});
   };
 
   const handleAcceptAI = async () => {

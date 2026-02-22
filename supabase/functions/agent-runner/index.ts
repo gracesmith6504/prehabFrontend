@@ -595,6 +595,9 @@ async function createEscalation(supabase: any, uid: string, runId: string, predi
     trigger_reason: triggerReason,
     status: "open",
   });
+
+  // Track escalation in Paid.ai
+  await recordPaidSignal("escalation_created", uid, triggerReason, false);
 }
 
 // ============================================

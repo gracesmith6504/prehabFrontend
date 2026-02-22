@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.agent-runner]
 verify_jwt = false
+
+[functions.paid-signal]
+verify_jwt = false
