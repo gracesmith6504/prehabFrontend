@@ -7,6 +7,7 @@ import RiskGauge from '@/components/RiskGauge';
 import RiskBadge from '@/components/RiskBadge';
 import TodaysSession from '@/components/TodaysSession';
 import AgentAdaptabilityCard from '@/components/AgentAdaptabilityCard';
+import WearableMetricsCard from '@/components/WearableMetricsCard';
 import SimplifiedDrivers from '@/components/SimplifiedDrivers';
 import PlanChanges from '@/components/PlanChanges';
 import GoalTracker from '@/components/GoalTracker';
@@ -278,6 +279,9 @@ export default function Dashboard() {
             </p>
           </div>
         </div>
+
+        {/* Wearable metrics */}
+        {user && <WearableMetricsCard athleteId={user.id} phase={phase} />}
 
         {/* AI Update + Risk Drivers */}
         {user && (
