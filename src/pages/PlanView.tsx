@@ -7,7 +7,8 @@ import FeedbackButtons from '@/components/FeedbackButtons';
 import SessionLogDialog from '@/components/SessionLogDialog';
 import ExtraSessionDialog from '@/components/ExtraSessionDialog';
 import { type PlanSession } from '@/lib/riskEngine';
-import { ClipboardList, ChevronLeft, ChevronRight, Bot, ShieldCheck, CheckCircle2, Plus, User, Edit3, Trash2 } from 'lucide-react';
+import { ClipboardList, ChevronLeft, ChevronRight, Bot, ShieldCheck, CheckCircle2, Plus, User, Edit3, Trash2, GitCompare } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { motion } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -89,6 +90,9 @@ export default function PlanView() {
   const [selectedSession, setSelectedSession] = useState<PlanSession | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedLog, setSelectedLog] = useState<SessionLog | null>(null);
+
+  // Plan view mode: 'adjusted' (AI) or 'original'
+  const [planView, setPlanView] = useState<'adjusted' | 'original'>('adjusted');
 
   // Add extra session day picker
   const [addExtraOpen, setAddExtraOpen] = useState(false);
@@ -247,6 +251,11 @@ export default function PlanView() {
   };
 
   const isCoachPlan = planOwnerType === 'coach';
+  const displayPlan = planView === 'original' ? original : adjusted;
+  const hasAIChanges = original.some((o, i) => {
+    const a = adjusted[i];
+    return a && (o.type !== a.type || o.intensity !== a.intensity || o.duration !== a.duration);
+  });
 
   return (
     <AppLayout>
@@ -301,15 +310,36 @@ export default function PlanView() {
           </Button>
         </div>
 
+        {/* Plan view toggle */}
+        {hasAIChanges && isCurrentWeek && (
+          <div className="flex items-center gap-3">
+            <GitCompare className="h-4 w-4 text-muted-foreground" />
+            <Tabs value={planView} onValueChange={(v) => setPlanView(v as 'adjusted' | 'original')} className="w-auto">
+              <TabsList className="h-8">
+                <TabsTrigger value="adjusted" className="text-xs px-3 h-6 gap-1.5">
+                  <Bot className="h-3 w-3" /> AI Adjusted
+                </TabsTrigger>
+                <TabsTrigger value="original" className="text-xs px-3 h-6 gap-1.5">
+                  <ClipboardList className="h-3 w-3" /> Original
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+            {planView === 'original' && (
+              <span className="text-xs text-muted-foreground">Showing baseline plan before AI modifications</span>
+            )}
+          </div>
+        )}
+
         {/* Calendar grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
           {weekDates.map(({ day, date }, idx) => {
-            const session = adjusted.find(s => s.day === day);
+            const session = displayPlan.find(s => s.day === day);
             const orig = original.find(s => s.day === day);
+            const adjSession = adjusted.find(s => s.day === day);
             const isToday = isSameDay(date, new Date());
             const log = getLogForDate(date);
             const isFuture = date > today;
-            const changed = orig && session && (orig.type !== session.type || orig.intensity !== session.intensity || orig.duration !== session.duration);
+            const changed = planView === 'adjusted' && orig && adjSession && (orig.type !== adjSession.type || orig.intensity !== adjSession.intensity || orig.duration !== adjSession.duration);
             const extras = getExtrasForDay(day);
 
             return (
