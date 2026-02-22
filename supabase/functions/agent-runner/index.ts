@@ -253,6 +253,143 @@ async function getAgentMemory(supabase: any, athleteId: string) {
 }
 
 // ============================================
+// AGENT TOOL: getAdaptiveState (closed-loop)
+// ============================================
+
+async function getAdaptiveState(supabase: any, athleteId: string) {
+  const { data } = await supabase
+    .from("athlete_agent_state")
+    .select("*")
+    .eq("athlete_id", athleteId)
+    .maybeSingle();
+  return data;
+}
+
+// ============================================
+// AGENT TOOL: evaluateAdaptivePolicy (REFLECT)
+// ============================================
+
+async function evaluateAdaptivePolicy(
+  supabase: any, runId: string, athleteId: string,
+  memory: { rejectCount: number; acceptCount: number }
+) {
+  const now = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000).toISOString();
+  const fourteenDaysAgo = new Date(now.getTime() - 14 * 86400000).toISOString();
+
+  // Count rejected/reverted feedback in last 7 days
+  const { data: recentFeedback } = await supabase
+    .from("feedback_events")
+    .select("feedback_type")
+    .eq("athlete_id", athleteId)
+    .gte("created_at", sevenDaysAgo)
+    .in("feedback_type", ["rejected", "modified"]);
+  const rejectCount7d = (recentFeedback || []).length;
+
+  // Count escalations resolved as false alarm in last 14 days
+  const { data: resolvedEscalations } = await supabase
+    .from("escalations")
+    .select("id, notes")
+    .eq("athlete_id", athleteId)
+    .eq("status", "resolved")
+    .gte("created_at", fourteenDaysAgo);
+  // Heuristic: resolved quickly (within 1h) or notes contain "false" = false alarm
+  const falseAlarmCount = (resolvedEscalations || []).filter((e: any) =>
+    e.notes?.toLowerCase().includes("false alarm") ||
+    e.notes?.toLowerCase().includes("not needed") ||
+    e.notes?.toLowerCase().includes("unnecessary")
+  ).length;
+
+  const updates: any = { updated_at: now.toISOString(), reasons: [] as any[] };
+  let policyChanged = false;
+
+  // Rule 1: ≥3 rejections → downgrade to suggest_only for 7 days
+  if (rejectCount7d >= 3) {
+    updates.autonomy_override = "suggest_only";
+    updates.autonomy_override_until = new Date(now.getTime() + 7 * 86400000).toISOString();
+    updates.adjustment_intensity_multiplier = 0.5;
+    updates.policy_mode = "dampened";
+    (updates.reasons as any[]).push({
+      rule: "reject_threshold",
+      detail: `${rejectCount7d} rejections in 7d → suggest_only for 7 days, intensity halved`,
+      applied_at: now.toISOString(),
+    });
+    policyChanged = true;
+  }
+
+  // Rule 2: ≥2 false alarm escalations → raise threshold for 14 days
+  if (falseAlarmCount >= 2) {
+    updates.escalation_threshold_override = "high_only";
+    updates.escalation_threshold_override_until = new Date(now.getTime() + 14 * 86400000).toISOString();
+    (updates.reasons as any[]).push({
+      rule: "false_alarm_threshold",
+      detail: `${falseAlarmCount} false alarm escalations in 14d → escalation threshold raised for 14 days`,
+      applied_at: now.toISOString(),
+    });
+    policyChanged = true;
+  }
+
+  if (policyChanged) {
+    // Upsert the adaptive state
+    const { data: existing } = await supabase
+      .from("athlete_agent_state")
+      .select("id")
+      .eq("athlete_id", athleteId)
+      .maybeSingle();
+
+    if (existing) {
+      await supabase.from("athlete_agent_state").update(updates).eq("athlete_id", athleteId);
+    } else {
+      await supabase.from("athlete_agent_state").insert({ athlete_id: athleteId, ...updates });
+    }
+
+    await logAction(supabase, runId, athleteId, "policy_update", {
+      rejectCount7d, falseAlarmCount,
+      autonomy_override: updates.autonomy_override || null,
+      escalation_threshold_override: updates.escalation_threshold_override || null,
+      adjustment_intensity_multiplier: updates.adjustment_intensity_multiplier,
+      reasons: updates.reasons,
+    });
+  }
+
+  return { policyChanged, rejectCount7d, falseAlarmCount };
+}
+
+// ============================================
+// AGENT TOOL: applyAdaptiveOverrides
+// ============================================
+
+function applyAdaptiveOverrides(
+  autonomyLevel: string,
+  adaptiveState: any | null
+): { effectiveAutonomy: string; intensityMultiplier: number; escalationThreshold: string } {
+  let effectiveAutonomy = autonomyLevel;
+  let intensityMultiplier = 1.0;
+  let escalationThreshold = "standard"; // standard = existing logic
+
+  if (!adaptiveState) return { effectiveAutonomy, intensityMultiplier, escalationThreshold };
+
+  const now = new Date();
+
+  // Apply autonomy override if still active
+  if (adaptiveState.autonomy_override && adaptiveState.autonomy_override_until) {
+    if (new Date(adaptiveState.autonomy_override_until) > now) {
+      effectiveAutonomy = adaptiveState.autonomy_override;
+      intensityMultiplier = Number(adaptiveState.adjustment_intensity_multiplier) || 0.5;
+    }
+  }
+
+  // Apply escalation threshold override if still active
+  if (adaptiveState.escalation_threshold_override && adaptiveState.escalation_threshold_override_until) {
+    if (new Date(adaptiveState.escalation_threshold_override_until) > now) {
+      escalationThreshold = adaptiveState.escalation_threshold_override;
+    }
+  }
+
+  return { effectiveAutonomy, intensityMultiplier, escalationThreshold };
+}
+
+// ============================================
 // AGENT TOOL: adjustPlanByAutonomy
 // ============================================
 
@@ -268,7 +405,7 @@ function defaultPlan() {
   ];
 }
 
-function adjustPlanByAutonomy(original: any[], riskScore: number, autonomyLevel: string, planLocked: boolean) {
+function adjustPlanByAutonomy(original: any[], riskScore: number, autonomyLevel: string, planLocked: boolean, intensityMultiplier: number = 1.0) {
   // If suggest_only or escalate, don't modify plan
   if (autonomyLevel === "suggest_only" || autonomyLevel === "escalate" || planLocked) {
     return { adjusted: original.map((s: any) => ({ ...s })), changes: [] as string[], planModified: false };
@@ -501,7 +638,24 @@ Deno.serve(async (req: Request) => {
         })
         .select("id").single();
 
-      // ===== 3. ACT (based on autonomy_level) =====
+      // ===== 3. ACT (with adaptive policy overrides) =====
+      const adaptiveState = await getAdaptiveState(supabase, state.uid);
+      const { effectiveAutonomy, intensityMultiplier, escalationThreshold } =
+        applyAdaptiveOverrides(state.autonomyLevel, adaptiveState);
+
+      // Log applied overrides if active
+      if (effectiveAutonomy !== state.autonomyLevel || escalationThreshold !== "standard") {
+        await logAction(supabase, runId, state.uid, "policy_applied", {
+          original_autonomy: state.autonomyLevel,
+          effective_autonomy: effectiveAutonomy,
+          intensity_multiplier: intensityMultiplier,
+          escalation_threshold: escalationThreshold,
+          adaptive_state_id: adaptiveState?.id || null,
+          autonomy_override_until: adaptiveState?.autonomy_override_until || null,
+          escalation_override_until: adaptiveState?.escalation_threshold_override_until || null,
+        });
+      }
+
       const { data: existingPlan } = await supabase
         .from("weekly_plans")
         .select("id, original_plan, locked_by_coach")
@@ -512,7 +666,7 @@ Deno.serve(async (req: Request) => {
       const planLocked = existingPlan?.locked_by_coach === true;
       const basePlan = existingPlan?.original_plan || defaultPlan();
       const { adjusted, changes, planModified } = adjustPlanByAutonomy(
-        basePlan as any[], riskScore, state.autonomyLevel, planLocked
+        basePlan as any[], riskScore, effectiveAutonomy, planLocked, intensityMultiplier
       );
 
       // Build explanation
@@ -522,9 +676,14 @@ Deno.serve(async (req: Request) => {
         explanationParts.push(`Recommended: ${mlResponse.recommended_actions.join("; ")}.`);
       }
       if (planLocked) explanationParts.push("(Plan locked by coach — no adjustments made.)");
-      else if (state.autonomyLevel === "suggest_only") explanationParts.push("(Suggest-only mode — plan not modified.)");
-      else if (state.autonomyLevel === "escalate") explanationParts.push("(Escalate mode — plan not modified, escalation created.)");
+      else if (effectiveAutonomy === "suggest_only" && effectiveAutonomy !== state.autonomyLevel) {
+        explanationParts.push("(Adaptive policy: downgraded to suggest_only due to repeated coach rejections.)");
+      } else if (effectiveAutonomy === "suggest_only") explanationParts.push("(Suggest-only mode — plan not modified.)");
+      else if (effectiveAutonomy === "escalate") explanationParts.push("(Escalate mode — plan not modified, escalation created.)");
       else if (changes.length) explanationParts.push(`Adjustments: ${changes.join("; ")}.`);
+      if (intensityMultiplier < 1.0 && planModified) {
+        explanationParts.push(`(Adjustment intensity reduced to ${Math.round(intensityMultiplier * 100)}% by adaptive policy.)`);
+      }
       const explanation = explanationParts.join(" ") || `Risk ${riskLevel} (score: ${riskScore}).`;
 
       // Write risk report
@@ -535,7 +694,7 @@ Deno.serve(async (req: Request) => {
       });
 
       // Write/update weekly plan (only modify if auto_adjust and not locked)
-      if (state.autonomyLevel === "auto_adjust" && !planLocked) {
+      if (effectiveAutonomy === "auto_adjust" && !planLocked) {
         if (existingPlan) {
           await supabase.from("weekly_plans").update({
             adjusted_plan: adjusted, risk_score: riskScore,
@@ -549,7 +708,6 @@ Deno.serve(async (req: Request) => {
           });
         }
       } else if (!existingPlan) {
-        // No plan exists yet — create one without adjustments
         await supabase.from("weekly_plans").insert({
           athlete_id: state.uid, original_plan: basePlan,
           adjusted_plan: basePlan, risk_score: riskScore,
@@ -557,31 +715,36 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      // Escalation logic based on autonomy level
+      // Escalation logic with adaptive threshold
       let shouldEscalate = false;
       let triggerReason = "";
 
-      if (state.autonomyLevel === "escalate") {
-        // Always escalate regardless of risk level
+      if (effectiveAutonomy === "escalate") {
         shouldEscalate = true;
         triggerReason = `autonomy_level=escalate (score: ${riskScore}, level: ${riskLevel})`;
       } else {
-        // Standard escalation rules for auto_adjust and suggest_only
-        if (riskLevel === "High") {
+        // Apply escalation threshold: "high_only" means only escalate for High risk
+        const thresholdScore = escalationThreshold === "high_only" ? 80 : 0;
+
+        if (riskLevel === "High" && riskScore > thresholdScore) {
           shouldEscalate = true;
           triggerReason = `risk_level=High (score: ${riskScore})`;
-        } else if (riskProb > 0.8) {
+        } else if (riskProb > 0.8 && escalationThreshold !== "high_only") {
           shouldEscalate = true;
           triggerReason = `risk_prob=${riskProb.toFixed(2)} > 0.8`;
         }
 
-        // Check 48h score spike
-        if (!shouldEscalate && memory.last3Scores.length >= 2) {
+        // Check 48h score spike (skip if threshold raised)
+        if (!shouldEscalate && escalationThreshold !== "high_only" && memory.last3Scores.length >= 2) {
           const prevScore = memory.last3Scores[1];
           if (riskScore - prevScore >= 15) {
             shouldEscalate = true;
             triggerReason = `Score jumped +${riskScore - prevScore} since last prediction`;
           }
+        }
+
+        if (!shouldEscalate && escalationThreshold === "high_only") {
+          console.log(`[ACT] Escalation suppressed for ${state.uid} — adaptive threshold=high_only`);
         }
       }
 
@@ -591,7 +754,10 @@ Deno.serve(async (req: Request) => {
 
       await logAction(supabase, runId, state.uid, "act", {
         autonomy_level: state.autonomyLevel,
-        action_taken: state.autonomyLevel,
+        effective_autonomy: effectiveAutonomy,
+        intensity_multiplier: intensityMultiplier,
+        escalation_threshold: escalationThreshold,
+        action_taken: effectiveAutonomy,
         plan_modified: planModified,
         plan_locked: planLocked,
         escalated: shouldEscalate,
@@ -599,7 +765,9 @@ Deno.serve(async (req: Request) => {
         changes,
       });
 
-      // ===== 4. REFLECT =====
+      // ===== 4. REFLECT (closed-loop policy evaluation) =====
+      const policyResult = await evaluateAdaptivePolicy(supabase, runId, state.uid, memory);
+
       await logAction(supabase, runId, state.uid, "reflect", {
         prediction_trend: memory.predictionTrend,
         current_score: riskScore,
@@ -611,6 +779,11 @@ Deno.serve(async (req: Request) => {
         confidence,
         injury_forecast: mlResponse.injury_window_forecast,
         trend_analysis: mlResponse.trend_analysis,
+        adaptive_policy: {
+          policy_changed: policyResult.policyChanged,
+          reject_count_7d: policyResult.rejectCount7d,
+          false_alarm_count_14d: policyResult.falseAlarmCount,
+        },
       });
 
       processed++;

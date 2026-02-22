@@ -85,6 +85,48 @@ export type Database = {
         }
         Relationships: []
       }
+      athlete_agent_state: {
+        Row: {
+          adjustment_intensity_multiplier: number
+          athlete_id: string
+          autonomy_override: string | null
+          autonomy_override_until: string | null
+          created_at: string
+          escalation_threshold_override: string | null
+          escalation_threshold_override_until: string | null
+          id: string
+          policy_mode: string
+          reasons: Json
+          updated_at: string
+        }
+        Insert: {
+          adjustment_intensity_multiplier?: number
+          athlete_id: string
+          autonomy_override?: string | null
+          autonomy_override_until?: string | null
+          created_at?: string
+          escalation_threshold_override?: string | null
+          escalation_threshold_override_until?: string | null
+          id?: string
+          policy_mode?: string
+          reasons?: Json
+          updated_at?: string
+        }
+        Update: {
+          adjustment_intensity_multiplier?: number
+          athlete_id?: string
+          autonomy_override?: string | null
+          autonomy_override_until?: string | null
+          created_at?: string
+          escalation_threshold_override?: string | null
+          escalation_threshold_override_until?: string | null
+          id?: string
+          policy_mode?: string
+          reasons?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       athlete_extra_sessions: {
         Row: {
           athlete_id: string
