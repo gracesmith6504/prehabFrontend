@@ -225,7 +225,7 @@ export default function Home() {
                 { q: "What happens when I run out of included interventions?", a: "You can keep training without interruption. Each additional intervention is billed at €3. You'll always see your current usage in the dashboard before the agent acts, so there are no surprises." },
                 { q: "Can I cap my monthly spend?", a: "Yes. You can set a monthly intervention limit in your settings. Once reached, the agent will flag recommendations but won't act autonomously — it hands decisions back to you or your coach." },
                 { q: "How does the Coach Plan share interventions across athletes?", a: "The 40 included interventions are pooled across all athletes on the plan. If one athlete needs more adjustments in a given month, the pool flexes to cover it. Additional interventions beyond 40 are €3 each." },
-                { q: "Is there a free trial?", a: "Yes — every new account gets a 14-day free trial with full agent capabilities and 5 included interventions so you can experience the value before committing." },
+                
                 { q: "What data does the AI agent use?", a: "The agent combines your menstrual cycle phase, training load history, daily soreness logs, and wearable metrics (steps, heart rate, sleep) to score injury risk and decide when to intervene." },
               ].map((item) => (
                 <AccordionItem key={item.q} value={item.q} className="glass-card px-6 border-none">
