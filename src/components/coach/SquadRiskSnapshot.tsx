@@ -1,14 +1,15 @@
-import { TrendingUp, TrendingDown, Minus, AlertTriangle, Shield, Activity, Flame } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, AlertTriangle, Shield, Activity, Flame, Zap } from 'lucide-react';
 
 interface Props {
   avgRisk: number;
   prevAvgRisk: number | null;
+  criticalCount: number;
   highCount: number;
   mediumCount: number;
   activeEscalations: number;
 }
 
-export default function SquadRiskSnapshot({ avgRisk, prevAvgRisk, highCount, mediumCount, activeEscalations }: Props) {
+export default function SquadRiskSnapshot({ avgRisk, prevAvgRisk, criticalCount, highCount, mediumCount, activeEscalations }: Props) {
   const delta = prevAvgRisk !== null ? avgRisk - prevAvgRisk : null;
   const TrendIcon = delta === null ? Minus : delta > 0 ? TrendingUp : delta < 0 ? TrendingDown : Minus;
   const trendColor = delta === null ? 'text-muted-foreground' : delta > 0 ? 'text-destructive' : delta < 0 ? 'text-primary' : 'text-muted-foreground';
@@ -27,16 +28,16 @@ export default function SquadRiskSnapshot({ avgRisk, prevAvgRisk, highCount, med
       ) : null,
     },
     {
+      label: 'Critical Risk',
+      value: criticalCount,
+      icon: Zap,
+      accent: criticalCount > 0 ? 'risk-critical' : 'text-muted-foreground',
+    },
+    {
       label: 'High Risk',
       value: highCount,
       icon: Flame,
-      accent: highCount > 0 ? 'text-destructive' : 'text-muted-foreground',
-    },
-    {
-      label: 'Medium Risk',
-      value: mediumCount,
-      icon: Activity,
-      accent: mediumCount > 0 ? 'text-warning' : 'text-muted-foreground',
+      accent: highCount > 0 ? 'risk-high' : 'text-muted-foreground',
     },
     {
       label: 'Active Escalations',

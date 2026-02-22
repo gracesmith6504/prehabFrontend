@@ -267,7 +267,7 @@ export default function CoachAthleteDetail({ athleteId, athleteName, onBack }: P
           </div>
           <div className="glass-card p-4 text-center">
             <p className="text-xs text-muted-foreground uppercase tracking-wider">Risk Score</p>
-            <p className={`font-heading font-bold text-lg ${report.risk_score >= 75 ? 'text-destructive' : report.risk_score >= 50 ? 'risk-medium' : 'text-primary'}`}>{report.risk_score}</p>
+            <p className={`font-heading font-bold text-lg ${report.risk_score >= 75 ? 'risk-critical' : report.risk_score >= 55 ? 'risk-high' : report.risk_score >= 35 ? 'risk-medium' : 'text-primary'}`}>{report.risk_score}</p>
           </div>
         </div>
       )}

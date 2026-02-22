@@ -136,12 +136,12 @@ async function callML(mlUrl: string, payload: any): Promise<AnalysisResponse> {
 }
 
 // ML model tiers: CRITICAL ≥75%, HIGH ≥55%, MEDIUM ≥35%, LOW <35%
-// Our UI tiers: High (escalation-worthy), Medium, Low
-// Only CRITICAL maps to High — HIGH maps to Medium to avoid over-escalation
-function mapRiskLevel(composite: string): "Low" | "Medium" | "High" {
+// UI now mirrors all 4 tiers: Critical, High, Medium, Low
+function mapRiskLevel(composite: string): "Low" | "Medium" | "High" | "Critical" {
   const lower = composite.toLowerCase();
-  if (lower.includes("critical") || lower.includes("severe")) return "High";
-  if (lower.includes("high") || lower.includes("medium") || lower.includes("moderate") || lower.includes("elevated")) return "Medium";
+  if (lower.includes("critical") || lower.includes("severe")) return "Critical";
+  if (lower.includes("high")) return "High";
+  if (lower.includes("medium") || lower.includes("moderate") || lower.includes("elevated")) return "Medium";
   return "Low";
 }
 
@@ -1231,9 +1231,9 @@ Write the message now:`;
         // Apply escalation threshold: "high_only" means only escalate for High risk
         const thresholdScore = escalationThreshold === "high_only" ? 80 : 0;
 
-      if (riskLevel === "High" && riskScore >= 75 && riskScore > thresholdScore) {
+      if (riskLevel === "Critical" && riskScore >= 75 && riskScore > thresholdScore) {
           shouldEscalate = true;
-          triggerReason = `risk_level=High (score: ${riskScore})`;
+          triggerReason = `risk_level=Critical (score: ${riskScore})`;
         } else if (riskProb > 0.8 && escalationThreshold !== "high_only") {
           shouldEscalate = true;
           triggerReason = `risk_prob=${riskProb.toFixed(2)} > 0.8`;

@@ -136,6 +136,7 @@ export default function CoachDashboard() {
     }
   };
 
+  const criticalCount = athletes.filter(a => a.risk_level === 'Critical').length;
   const highCount = athletes.filter(a => a.risk_level === 'High').length;
   const mediumCount = athletes.filter(a => a.risk_level === 'Medium').length;
   const avgScore = athletes.length ? Math.round(athletes.reduce((s, a) => s + a.risk_score, 0) / athletes.length) : 0;
@@ -191,6 +192,7 @@ export default function CoachDashboard() {
         <SquadRiskSnapshot
           avgRisk={avgScore}
           prevAvgRisk={prevAvgRisk}
+          criticalCount={criticalCount}
           highCount={highCount}
           mediumCount={mediumCount}
           activeEscalations={enrichedEscalations.length}

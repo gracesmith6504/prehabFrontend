@@ -147,6 +147,9 @@
     color: hsl(var(--warning));
   }
   .risk-high {
+    color: hsl(25 90% 50%);
+  }
+  .risk-critical {
     @apply text-destructive;
   }
 
@@ -161,6 +164,11 @@
     border: 1px solid hsl(var(--warning) / 0.3);
   }
   .risk-badge-high {
+    background: hsl(25 90% 50% / 0.12);
+    color: hsl(25 90% 45%);
+    border: 1px solid hsl(25 90% 50% / 0.25);
+  }
+  .risk-badge-critical {
     background: hsl(0 72% 50% / 0.1);
     color: hsl(0 72% 42%);
     border: 1px solid hsl(0 72% 50% / 0.25);

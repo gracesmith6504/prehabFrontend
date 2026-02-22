@@ -1,5 +1,6 @@
 export default function RiskBadge({ level }: { level: string }) {
   const cls =
+    level === 'Critical' ? 'risk-badge-critical' :
     level === 'High' ? 'risk-badge-high' :
     level === 'Medium' ? 'risk-badge-medium' :
     'risk-badge-low';
