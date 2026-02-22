@@ -143,6 +143,55 @@ function mapRiskLevel(composite: string): "Low" | "Medium" | "High" {
 }
 
 // ============================================
+// Lovable AI (Gemini) — coach-friendly explanations
+// ============================================
+
+async function callGemini(prompt: string): Promise<string> {
+  const apiKey = Deno.env.get("LOVABLE_API_KEY");
+  if (!apiKey) {
+    console.warn("[GEMINI] LOVABLE_API_KEY not set — skipping AI explanation");
+    return "";
+  }
+
+  try {
+    const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-3-flash-preview",
+        messages: [
+          {
+            role: "system",
+            content: `You are an expert sports physiotherapist and performance coach AI assistant for the PREHAB injury prevention platform. Write brief, actionable explanations (2-4 sentences max) for coaches and athletes. Use plain language, no jargon. Be direct about what the data means and what to do about it. Never use markdown formatting.`,
+          },
+          { role: "user", content: prompt },
+        ],
+        max_tokens: 200,
+      }),
+    });
+
+    if (!resp.ok) {
+      const status = resp.status;
+      if (status === 429 || status === 402) {
+        console.warn(`[GEMINI] Rate limited (${status}) — falling back to template`);
+        return "";
+      }
+      console.warn(`[GEMINI] Error ${status} — falling back to template`);
+      return "";
+    }
+
+    const data = await resp.json();
+    return data.choices?.[0]?.message?.content?.trim() || "";
+  } catch (err: any) {
+    console.warn(`[GEMINI] Failed: ${err.message} — falling back to template`);
+    return "";
+  }
+}
+
+// ============================================
 // AGENT TOOL: logAction
 // ============================================
 
@@ -591,6 +640,9 @@ async function evaluateGoals(
     // Risk reduction goal if score > 40
     if (riskScore > 40) {
       const targetScore = Math.round(riskScore * 0.9); // 10% reduction
+      const goalReason = await callGemini(
+        `Write a 1-sentence reason for setting this athlete's goal: reduce injury risk score from ${riskScore} to ${targetScore} over 4 weeks. Their current phase is ${state.phaseName}, ACR is ${state.acr.toFixed(2)}, and trend is ${state.sessions.length} sessions logged. Be specific and motivating.`
+      );
       newGoals.push({
         athlete_id: athleteId, created_by: athleteId, created_by_type: "agent",
         metric_type: "risk_score", direction: "decrease",
@@ -598,12 +650,15 @@ async function evaluateGoals(
         current_value: riskScore,
         deadline: new Date(Date.now() + 28 * 86400000).toISOString(),
         agent_run_id: runId,
-        reason: `Auto-generated: Reduce risk score from ${riskScore} to ${targetScore} (10% reduction over 4 weeks)`,
+        reason: goalReason || `Auto-generated: Reduce risk score from ${riskScore} to ${targetScore} (10% reduction over 4 weeks)`,
       });
     }
 
     // ACR maintenance goal if ACR is available
     if (state.acr > 0) {
+      const acrReason = await callGemini(
+        `Write a 1-sentence reason for this athlete's goal: maintain acute:chronic workload ratio between 0.8 and 1.3. Current ACR is ${state.acr.toFixed(2)}. Explain why this range matters for injury prevention in plain language.`
+      );
       newGoals.push({
         athlete_id: athleteId, created_by: athleteId, created_by_type: "agent",
         metric_type: "acr", direction: "maintain_range",
@@ -611,7 +666,7 @@ async function evaluateGoals(
         baseline_value: state.acr, current_value: state.acr,
         deadline: new Date(Date.now() + 28 * 86400000).toISOString(),
         agent_run_id: runId,
-        reason: "Auto-generated: Maintain acute:chronic workload ratio in safe zone (0.8–1.3)",
+        reason: acrReason || "Auto-generated: Maintain acute:chronic workload ratio in safe zone (0.8–1.3)",
       });
     }
 
@@ -619,7 +674,7 @@ async function evaluateGoals(
       await supabase.from("athlete_goals").insert(newGoals);
       await logAction(supabase, runId, athleteId, "goal_created", {
         goals_created: newGoals.length,
-        details: newGoals.map(g => ({ metric: g.metric_type, target: g.target_value, direction: g.direction })),
+        details: newGoals.map(g => ({ metric: g.metric_type, target: g.target_value, direction: g.direction, reason: g.reason })),
       });
     }
   }
@@ -844,25 +899,39 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      // Build explanation
-      const explanationParts: string[] = [];
-      if (mlResponse.explanation) explanationParts.push(mlResponse.explanation);
-      if (mlResponse.recommended_actions?.length) {
-        explanationParts.push(`Recommended: ${mlResponse.recommended_actions.join("; ")}.`);
-      }
-      if (planLocked) explanationParts.push("(Plan locked by coach — no adjustments made.)");
+      // Build explanation — use Gemini for coach-friendly narrative
+      const templateParts: string[] = [];
+      if (planLocked) templateParts.push("Plan locked by coach — no adjustments made.");
       else if (effectiveAutonomy === "suggest_only" && effectiveAutonomy !== state.autonomyLevel) {
-        explanationParts.push("(Adaptive policy: downgraded to suggest_only due to repeated coach rejections.)");
-      } else if (effectiveAutonomy === "suggest_only") explanationParts.push("(Suggest-only mode — plan not modified.)");
-      else if (effectiveAutonomy === "escalate") explanationParts.push("(Escalate mode — plan not modified, escalation created.)");
-      else if (changes.length) explanationParts.push(`Adjustments: ${changes.join("; ")}.`);
+        templateParts.push("Adaptive policy: downgraded to suggest_only due to repeated coach rejections.");
+      } else if (effectiveAutonomy === "suggest_only") templateParts.push("Suggest-only mode — plan not modified.");
+      else if (effectiveAutonomy === "escalate") templateParts.push("Escalate mode — plan not modified, escalation created.");
+      else if (changes.length) templateParts.push(`Adjustments: ${changes.join("; ")}.`);
       if (intensityMultiplier < 1.0 && planModified) {
-        explanationParts.push(`(Adjustment intensity reduced to ${Math.round(intensityMultiplier * 100)}% by adaptive policy.)`);
+        templateParts.push(`Adjustment intensity reduced to ${Math.round(intensityMultiplier * 100)}% by adaptive policy.`);
       }
       if (goalInfluence.goalContext.length) {
-        explanationParts.push(`Goals: ${goalInfluence.goalContext.join(" ")}`);
+        templateParts.push(`Goals: ${goalInfluence.goalContext.join(" ")}`);
       }
-      const explanation = explanationParts.join(" ") || `Risk ${riskLevel} (score: ${riskScore}).`;
+      const templateExplanation = templateParts.join(" ");
+
+      // Generate Gemini-powered explanation
+      const geminiPrompt = `Summarize this athlete's risk assessment for their coach in 2-4 plain-language sentences.
+
+Risk score: ${riskScore}/100 (${riskLevel})
+Phase: ${state.phaseName}
+Acute:Chronic ratio: ${state.acr.toFixed(2)}
+Confidence: ${(confidence * 100).toFixed(0)}%
+Trend: ${memory.predictionTrend} (last 3 scores: ${memory.last3Scores.join(", ")})
+Top risk factors: ${topDrivers.slice(0, 3).map((d: any) => d.label || d.feature).join(", ")}
+ML explanation: ${mlResponse.explanation || "none"}
+Recommended actions: ${mlResponse.recommended_actions?.join("; ") || "none"}
+Plan changes: ${changes.length ? changes.join("; ") : "none"}
+Active goals: ${goalResults.map((g: any) => `${g.metric_type} ${g.direction} → ${g.progress_pct}% progress`).join("; ") || "none"}
+${templateExplanation ? `Context: ${templateExplanation}` : ""}`;
+
+      const geminiExplanation = await callGemini(geminiPrompt);
+      const explanation = geminiExplanation || templateExplanation || `Risk ${riskLevel} (score: ${riskScore}).`;
 
       // Write risk report
       await writeRiskReport(supabase, {
