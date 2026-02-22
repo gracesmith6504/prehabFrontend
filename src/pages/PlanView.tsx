@@ -280,9 +280,7 @@ export default function PlanView() {
           <div className="glass-card p-3 flex items-center gap-3 text-sm">
             <Bot className="h-4 w-4 text-primary" />
             <span className="text-muted-foreground">Updated {formatDistanceToNow(new Date(agentRun.started_at))} ago</span>
-            {agentRun.model_version && (
-              <span className="text-xs bg-secondary px-2 py-0.5 rounded-full font-mono">{agentRun.model_version}</span>
-            )}
+            <span className="text-xs bg-secondary px-2 py-0.5 rounded-full">PREHAB Engine</span>
           </div>
         )}
 

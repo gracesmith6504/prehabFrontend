@@ -3,6 +3,35 @@ import { supabase } from '@/integrations/supabase/client';
 import { Bot, Clock, Cpu, Zap } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
+function formatModelVersion(v: string | null | undefined): string {
+  if (!v) return 'PREHAB Engine';
+  if (v.includes('cloudrun')) return 'PREHAB AI · Cloud';
+  if (v.includes('xgboost') || v.includes('gradient')) return 'PREHAB AI · ML';
+  if (v.includes('rules')) return 'PREHAB · Rules Engine';
+  return 'PREHAB Engine';
+}
+
+function formatPredictorType(t: string): string {
+  const map: Record<string, string> = {
+    xgboost: 'Gradient Boosting',
+    gradient_boost: 'Gradient Boosting',
+    logistic: 'Logistic Regression',
+    rules: 'Rules Engine',
+    ml: 'ML Model',
+  };
+  return map[t.toLowerCase()] ?? 'ML Model';
+}
+
+function formatTriggerType(t: string): string {
+  const map: Record<string, string> = {
+    manual: 'Manual trigger',
+    scheduled: 'Scheduled',
+    cron: 'Scheduled',
+    webhook: 'Webhook',
+  };
+  return map[t.toLowerCase()] ?? t;
+}
+
 interface AgentRun {
   id: string;
   status: string;
@@ -75,7 +104,7 @@ export default function AgentStatus({ athleteId }: Props) {
           <Cpu className="h-3.5 w-3.5 text-muted-foreground" />
           <div>
             <p className="text-xs text-muted-foreground">Model</p>
-            <p className="font-medium">{prediction?.model_version || lastRun.model_version || 'rules-v1.0'}</p>
+            <p className="font-medium">{formatModelVersion(prediction?.model_version || lastRun.model_version)}</p>
           </div>
         </div>
         {prediction && (
@@ -91,7 +120,7 @@ export default function AgentStatus({ athleteId }: Props) {
               <Bot className="h-3.5 w-3.5 text-muted-foreground" />
               <div>
                 <p className="text-xs text-muted-foreground">Predictor</p>
-                <p className="font-medium capitalize">{prediction.predictor_type}</p>
+                <p className="font-medium">{formatPredictorType(prediction.predictor_type)}</p>
               </div>
             </div>
           </>
@@ -106,7 +135,7 @@ export default function AgentStatus({ athleteId }: Props) {
         <span>•</span>
         <span>{lastRun.athletes_processed} athletes processed</span>
         <span>•</span>
-        <span className="capitalize">{lastRun.trigger_type}</span>
+        <span>{formatTriggerType(lastRun.trigger_type)}</span>
       </div>
     </div>
   );

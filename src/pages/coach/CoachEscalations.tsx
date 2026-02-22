@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { rewriteForCoach } from '@/lib/utils';
+import { rewriteForCoach, formatTriggerReason } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import AppLayout from '@/components/AppLayout';
 import RiskBadge from '@/components/RiskBadge';
@@ -483,7 +483,7 @@ export default function CoachEscalations() {
                   </span>
                 </div>
                 <SheetDescription className="text-sm text-foreground/80">
-                  {selected.trigger_reason.replace(/risk_level=\w+\s*\(score:\s*\d+\)/gi, '').trim() || selected.trigger_reason}
+                  {formatTriggerReason(selected.trigger_reason)}
                 </SheetDescription>
               </SheetHeader>
 

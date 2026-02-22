@@ -7,6 +7,7 @@ import RiskBadge from '@/components/RiskBadge';
 import SimplifiedDrivers from '@/components/SimplifiedDrivers';
 import PlanChanges from '@/components/PlanChanges';
 import { getCurrentPhase, type MenstrualPhase } from '@/lib/riskEngine';
+import { formatTriggerReason } from '@/lib/utils';
 import { ShieldCheck, TrendingUp, TrendingDown, Minus, Clock, AlertTriangle, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { formatDistanceToNow } from 'date-fns';
@@ -199,7 +200,7 @@ export default function RiskReport() {
               <AlertTriangle className="h-5 w-5 text-destructive" />
               <p className="font-bold text-sm text-destructive">Your coach has been notified</p>
             </div>
-            <p className="text-sm text-muted-foreground">{escalation.trigger_reason}</p>
+            <p className="text-sm text-muted-foreground">{formatTriggerReason(escalation.trigger_reason)}</p>
             <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
               <Clock className="h-3 w-3" />
               {formatDistanceToNow(new Date(escalation.created_at), { addSuffix: true })}
