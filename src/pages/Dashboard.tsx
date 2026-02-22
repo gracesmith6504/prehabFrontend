@@ -9,6 +9,7 @@ import TodaysSession from '@/components/TodaysSession';
 import AIUpdateCard from '@/components/AIUpdateCard';
 import SimplifiedDrivers from '@/components/SimplifiedDrivers';
 import PlanChanges from '@/components/PlanChanges';
+import GoalTracker from '@/components/GoalTracker';
 import { motion } from 'framer-motion';
 import {
   getCurrentPhase,
@@ -275,6 +276,9 @@ export default function Dashboard() {
             <SimplifiedDrivers athleteId={user.id} />
           </div>
         )}
+
+        {/* Goals */}
+        {user && <GoalTracker athleteId={user.id} />}
 
         {/* Plan Changes */}
         {user && <PlanChanges athleteId={user.id} />}

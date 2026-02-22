@@ -11,6 +11,7 @@ import FeedbackButtons from '@/components/FeedbackButtons';
 import RiskBadge from '@/components/RiskBadge';
 import { ArrowLeft, Lock, Unlock, RotateCcw, CheckCircle2, Edit3, X, User, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import GoalTracker from '@/components/GoalTracker';
 
 interface Props {
   athleteId: string;
@@ -387,6 +388,9 @@ export default function CoachAthleteDetail({ athleteId, athleteName, onBack }: P
           </CardContent>
         </Card>
       )}
+
+      {/* Goals */}
+      <GoalTracker athleteId={athleteId} />
     </div>
   );
 }

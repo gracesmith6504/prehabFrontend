@@ -492,6 +492,163 @@ async function createEscalation(supabase: any, uid: string, runId: string, predi
 }
 
 // ============================================
+// AGENT TOOL: Goal tracking (REFLECT)
+// ============================================
+
+async function getActiveGoals(supabase: any, athleteId: string) {
+  const { data } = await supabase
+    .from("athlete_goals")
+    .select("*")
+    .eq("athlete_id", athleteId)
+    .eq("status", "active");
+  return data || [];
+}
+
+function computeGoalMetric(metricType: string, state: { acr: number }, riskScore: number, sessions: any[]): number {
+  switch (metricType) {
+    case "risk_score": return riskScore;
+    case "acr": return state.acr;
+    case "weekly_load": {
+      const now = Date.now();
+      let total = 0;
+      for (const s of sessions) {
+        if (new Date(s.date).getTime() >= now - 7 * 86400000) {
+          const m = s.intensity === "High" ? 1.5 : s.intensity === "Medium" ? 1.0 : 0.6;
+          total += (s.duration * s.rpe * m) / 10;
+        }
+      }
+      return total;
+    }
+    default: return 0;
+  }
+}
+
+function computeGoalProgress(goal: any, currentValue: number): { progressPct: number; achieved: boolean; failed: boolean } {
+  const now = new Date();
+  const deadline = new Date(goal.deadline);
+  const failed = now > deadline;
+
+  if (goal.direction === "maintain_range") {
+    const inRange = currentValue >= (goal.target_range_min ?? 0) && currentValue <= (goal.target_range_max ?? 100);
+    return { progressPct: inRange ? 100 : 0, achieved: inRange && !failed, failed: failed && !inRange };
+  }
+
+  const baseline = Number(goal.baseline_value);
+  const target = Number(goal.target_value);
+  const diff = baseline - target; // for decrease
+  if (diff === 0) return { progressPct: 100, achieved: true, failed: false };
+
+  if (goal.direction === "decrease") {
+    const progress = Math.min(100, Math.max(0, ((baseline - currentValue) / diff) * 100));
+    return { progressPct: Math.round(progress), achieved: currentValue <= target, failed: failed && currentValue > target };
+  } else {
+    // increase
+    const diff2 = target - baseline;
+    if (diff2 === 0) return { progressPct: 100, achieved: true, failed: false };
+    const progress = Math.min(100, Math.max(0, ((currentValue - baseline) / diff2) * 100));
+    return { progressPct: Math.round(progress), achieved: currentValue >= target, failed: failed && currentValue < target };
+  }
+}
+
+async function evaluateGoals(
+  supabase: any, runId: string, athleteId: string,
+  riskScore: number, state: any
+) {
+  const goals = await getActiveGoals(supabase, athleteId);
+  const goalResults: any[] = [];
+
+  for (const goal of goals) {
+    const currentValue = computeGoalMetric(goal.metric_type, state, riskScore, state.sessions);
+    const { progressPct, achieved, failed } = computeGoalProgress(goal, currentValue);
+
+    // Update progress history
+    const history = Array.isArray(goal.progress_history) ? [...goal.progress_history] : [];
+    history.push({ date: new Date().toISOString().split("T")[0], value: currentValue, progress_pct: progressPct });
+    // Keep last 30 entries
+    if (history.length > 30) history.splice(0, history.length - 30);
+
+    const updates: any = {
+      current_value: currentValue,
+      progress_pct: progressPct,
+      progress_history: history,
+    };
+    if (achieved) { updates.status = "achieved"; updates.achieved_at = new Date().toISOString(); }
+    if (failed) { updates.status = "failed"; }
+
+    await supabase.from("athlete_goals").update(updates).eq("id", goal.id);
+
+    goalResults.push({
+      id: goal.id, metric_type: goal.metric_type, direction: goal.direction,
+      target: goal.target_value, baseline: goal.baseline_value,
+      current: currentValue, progress_pct: progressPct, achieved, failed,
+    });
+  }
+
+  // Auto-create goals if none exist and we have enough data
+  if (goals.length === 0 && state.sessions.length >= 7) {
+    const newGoals: any[] = [];
+
+    // Risk reduction goal if score > 40
+    if (riskScore > 40) {
+      const targetScore = Math.round(riskScore * 0.9); // 10% reduction
+      newGoals.push({
+        athlete_id: athleteId, created_by: athleteId, created_by_type: "agent",
+        metric_type: "risk_score", direction: "decrease",
+        target_value: targetScore, baseline_value: riskScore,
+        current_value: riskScore,
+        deadline: new Date(Date.now() + 28 * 86400000).toISOString(),
+        agent_run_id: runId,
+        reason: `Auto-generated: Reduce risk score from ${riskScore} to ${targetScore} (10% reduction over 4 weeks)`,
+      });
+    }
+
+    // ACR maintenance goal if ACR is available
+    if (state.acr > 0) {
+      newGoals.push({
+        athlete_id: athleteId, created_by: athleteId, created_by_type: "agent",
+        metric_type: "acr", direction: "maintain_range",
+        target_value: 1.0, target_range_min: 0.8, target_range_max: 1.3,
+        baseline_value: state.acr, current_value: state.acr,
+        deadline: new Date(Date.now() + 28 * 86400000).toISOString(),
+        agent_run_id: runId,
+        reason: "Auto-generated: Maintain acute:chronic workload ratio in safe zone (0.8–1.3)",
+      });
+    }
+
+    if (newGoals.length > 0) {
+      await supabase.from("athlete_goals").insert(newGoals);
+      await logAction(supabase, runId, athleteId, "goal_created", {
+        goals_created: newGoals.length,
+        details: newGoals.map(g => ({ metric: g.metric_type, target: g.target_value, direction: g.direction })),
+      });
+    }
+  }
+
+  return goalResults;
+}
+
+// Goal-aware plan influence: if goals exist, bias adjustments toward goal achievement
+function getGoalInfluence(goalResults: any[]): { shouldReduceLoad: boolean; shouldIncreaseRecovery: boolean; goalContext: string[] } {
+  const context: string[] = [];
+  let shouldReduceLoad = false;
+  let shouldIncreaseRecovery = false;
+
+  for (const g of goalResults) {
+    if (g.metric_type === "risk_score" && g.direction === "decrease" && g.progress_pct < 50) {
+      shouldReduceLoad = true;
+      shouldIncreaseRecovery = true;
+      context.push(`Risk reduction goal at ${g.progress_pct}% — biasing toward lower intensity.`);
+    }
+    if (g.metric_type === "acr" && g.current > 1.3) {
+      shouldReduceLoad = true;
+      context.push(`ACR goal: current ${g.current.toFixed(2)} exceeds safe range — reducing load.`);
+    }
+  }
+
+  return { shouldReduceLoad, shouldIncreaseRecovery, goalContext: context };
+}
+
+// ============================================
 // Main handler — Agentic OBSERVE→THINK→ACT→LOG→REFLECT loop
 // ============================================
 
@@ -665,9 +822,27 @@ Deno.serve(async (req: Request) => {
 
       const planLocked = existingPlan?.locked_by_coach === true;
       const basePlan = existingPlan?.original_plan || defaultPlan();
-      const { adjusted, changes, planModified } = adjustPlanByAutonomy(
+      let { adjusted, changes, planModified } = adjustPlanByAutonomy(
         basePlan as any[], riskScore, effectiveAutonomy, planLocked, intensityMultiplier
       );
+
+      // Evaluate goals and apply goal-aware influence
+      const goalResults = await evaluateGoals(supabase, runId, state.uid, riskScore, state);
+      const goalInfluence = getGoalInfluence(goalResults);
+
+      // Apply goal-driven plan adjustments (only if auto_adjust and not locked)
+      if (effectiveAutonomy === "auto_adjust" && !planLocked && (goalInfluence.shouldReduceLoad || goalInfluence.shouldIncreaseRecovery)) {
+        adjusted.forEach((s: any) => {
+          if (goalInfluence.shouldReduceLoad && s.intensity === "High" && s.type !== "Match") {
+            if (!changes.some(c => c.includes(s.day))) {
+              changes.push(`Goal-driven: Reduced ${s.type} intensity (${s.day}) to Medium`);
+              s.intensity = "Medium";
+              s.notes = (s.notes ? s.notes + " | " : "") + "Intensity lowered to pursue goal";
+              planModified = true;
+            }
+          }
+        });
+      }
 
       // Build explanation
       const explanationParts: string[] = [];
@@ -683,6 +858,9 @@ Deno.serve(async (req: Request) => {
       else if (changes.length) explanationParts.push(`Adjustments: ${changes.join("; ")}.`);
       if (intensityMultiplier < 1.0 && planModified) {
         explanationParts.push(`(Adjustment intensity reduced to ${Math.round(intensityMultiplier * 100)}% by adaptive policy.)`);
+      }
+      if (goalInfluence.goalContext.length) {
+        explanationParts.push(`Goals: ${goalInfluence.goalContext.join(" ")}`);
       }
       const explanation = explanationParts.join(" ") || `Risk ${riskLevel} (score: ${riskScore}).`;
 
@@ -763,6 +941,11 @@ Deno.serve(async (req: Request) => {
         escalated: shouldEscalate,
         trigger_reason: shouldEscalate ? triggerReason : null,
         changes,
+        goals: {
+          active_goals: goalResults.length,
+          goal_influence: goalInfluence.goalContext,
+          results: goalResults,
+        },
       });
 
       // ===== 4. REFLECT (closed-loop policy evaluation) =====
@@ -783,6 +966,12 @@ Deno.serve(async (req: Request) => {
           policy_changed: policyResult.policyChanged,
           reject_count_7d: policyResult.rejectCount7d,
           false_alarm_count_14d: policyResult.falseAlarmCount,
+        },
+        goals: {
+          evaluated: goalResults.length,
+          achieved: goalResults.filter(g => g.achieved).length,
+          failed: goalResults.filter(g => g.failed).length,
+          in_progress: goalResults.filter(g => !g.achieved && !g.failed).length,
         },
       });
 

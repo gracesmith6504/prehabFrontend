@@ -163,6 +163,75 @@ export type Database = {
         }
         Relationships: []
       }
+      athlete_goals: {
+        Row: {
+          achieved_at: string | null
+          agent_run_id: string | null
+          athlete_id: string
+          baseline_value: number
+          created_at: string
+          created_by: string
+          created_by_type: string
+          current_value: number | null
+          deadline: string
+          direction: string
+          id: string
+          metric_type: string
+          progress_history: Json
+          progress_pct: number
+          reason: string | null
+          status: string
+          target_range_max: number | null
+          target_range_min: number | null
+          target_value: number
+          updated_at: string
+        }
+        Insert: {
+          achieved_at?: string | null
+          agent_run_id?: string | null
+          athlete_id: string
+          baseline_value: number
+          created_at?: string
+          created_by: string
+          created_by_type?: string
+          current_value?: number | null
+          deadline: string
+          direction?: string
+          id?: string
+          metric_type: string
+          progress_history?: Json
+          progress_pct?: number
+          reason?: string | null
+          status?: string
+          target_range_max?: number | null
+          target_range_min?: number | null
+          target_value: number
+          updated_at?: string
+        }
+        Update: {
+          achieved_at?: string | null
+          agent_run_id?: string | null
+          athlete_id?: string
+          baseline_value?: number
+          created_at?: string
+          created_by?: string
+          created_by_type?: string
+          current_value?: number | null
+          deadline?: string
+          direction?: string
+          id?: string
+          metric_type?: string
+          progress_history?: Json
+          progress_pct?: number
+          reason?: string | null
+          status?: string
+          target_range_max?: number | null
+          target_range_min?: number | null
+          target_value?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       athlete_profiles: {
         Row: {
           autonomy_level: string
