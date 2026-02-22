@@ -192,20 +192,31 @@ async function callGemini(prompt: string): Promise<string> {
 }
 
 // ============================================
-// Paid.ai signal recording
+// Agent-native usage economics — Paid.ai signal recording
+// Measures autonomous work performed, compute consumed,
+// and economic value created (cost vs. time saved).
 // ============================================
 
 const PAID_AGENT_ID = "prehab-agent";
 
+interface EconomicsData {
+  compute_cost_eur?: number;
+  ml_calls?: number;
+  plan_adjusted?: boolean;
+  escalated?: boolean;
+  hours_saved_estimate?: number;
+  manual_value_eur_estimate?: number;
+  [key: string]: any;
+}
+
 async function recordPaidSignal(
   eventName: string,
   athleteId: string,
-  riskLevel: string,
-  planAdjusted: boolean,
+  economics: EconomicsData = {},
 ) {
   const apiKey = Deno.env.get("PAID_API_KEY");
   if (!apiKey) {
-    console.log(`[Paid.ai] PAID_API_KEY not set — skipping signal: ${eventName}`);
+    console.log(`[Paid.ai] PAID_API_KEY not set — skipping: ${eventName}`);
     return;
   }
 
@@ -224,14 +235,7 @@ async function recordPaidSignal(
           agent_id: PAID_AGENT_ID,
           external_customer_id: athleteId,
           external_product_id: orderId,
-          data: {
-            risk_level: riskLevel,
-            plan_adjusted: planAdjusted,
-            costData: {
-              vendor: "crusoe",
-              cost: { amount: 0.002, currency: "USD" },
-            },
-          },
+          data: economics,
         }],
       }),
     });
@@ -240,8 +244,8 @@ async function recordPaidSignal(
       const body = await resp.text();
       console.warn(`[Paid.ai] Signal failed [${resp.status}]: ${body}`);
     } else {
-      await resp.text(); // consume body
-      console.log(`[Paid.ai] Signal recorded: ${eventName} for ${athleteId}`);
+      await resp.text();
+      console.log(`[Paid.ai] Agent work tracked: ${eventName} | athlete=${athleteId} | compute=€${economics.compute_cost_eur ?? 0}`);
     }
   } catch (err: any) {
     console.warn(`[Paid.ai] Failed to record signal: ${err.message}`);
@@ -596,8 +600,16 @@ async function createEscalation(supabase: any, uid: string, runId: string, predi
     status: "open",
   });
 
-  // Track escalation in Paid.ai
-  await recordPaidSignal("escalation_created", uid, triggerReason, false);
+  // Track escalation — autonomous agent work
+  await recordPaidSignal("escalation_created", uid, {
+    compute_cost_eur: 0.01,
+    ml_calls: 0,
+    plan_adjusted: false,
+    escalated: true,
+    hours_saved_estimate: 0.5,
+    manual_value_eur_estimate: 20,
+    trigger_reason: triggerReason,
+  });
 }
 
 // ============================================
@@ -1076,13 +1088,44 @@ Write the message now:`;
         },
       });
 
-      // ===== Paid.ai usage signal =====
-      await recordPaidSignal(
-        "agent_run_completed",
-        state.uid,
-        riskLevel,
-        planModified,
-      );
+      // ===== Agent-native usage economics =====
+      // 1. Core agent run signal — every evaluation is autonomous work
+      await recordPaidSignal("agent_run", state.uid, {
+        compute_cost_eur: 0.03,
+        ml_calls: 1,
+        plan_adjusted: planModified,
+        escalated: shouldEscalate,
+        hours_saved_estimate: 0.5,
+        manual_value_eur_estimate: 20,
+        risk_level: riskLevel,
+        risk_score: riskScore,
+      });
+
+      // 2. Risk evaluation signal — ML model invocation
+      await recordPaidSignal("risk_evaluation", state.uid, {
+        compute_cost_eur: 0.02,
+        ml_calls: 1,
+        plan_adjusted: false,
+        escalated: false,
+        hours_saved_estimate: 0.25,
+        manual_value_eur_estimate: 10,
+        risk_level: riskLevel,
+        confidence,
+      });
+
+      // 3. Plan-adjustment surcharge — proves autonomous preventative work
+      if (planModified) {
+        await recordPaidSignal("plan_adjustment", state.uid, {
+          compute_cost_eur: 0.05,
+          ml_calls: 0,
+          plan_adjusted: true,
+          escalated: false,
+          hours_saved_estimate: 0.75,
+          manual_value_eur_estimate: 30,
+          changes,
+          autonomy_level: effectiveAutonomy,
+        });
+      }
 
       // ===== 4. REFLECT (closed-loop policy evaluation) =====
       const policyResult = await evaluateAdaptivePolicy(supabase, runId, state.uid, memory);

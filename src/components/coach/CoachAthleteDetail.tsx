@@ -132,12 +132,22 @@ export default function CoachAthleteDetail({ athleteId, athleteName, onBack }: P
       reason: reason || null,
     });
 
-    // Fire-and-forget Paid.ai signal for coach override
+    // Track coach override as autonomous agent interaction
+    const eventMap: Record<string, string> = {
+      accept_ai: 'coach_override_accepted',
+      modify_session: 'coach_override_modified',
+      revert_original: 'coach_override_rejected',
+      lock_week: 'coach_override_modified',
+    };
+    const mappedEvent = eventMap[overrideType] || 'coach_override_modified';
     supabase.functions.invoke('paid-signal', {
       body: {
-        event_name: `coach_override_${overrideType}`,
+        event_name: mappedEvent,
         athlete_id: athleteId,
-        details: { override_type: overrideType, session_day: sessionDay || null },
+        details: {
+          override_type: overrideType,
+          session_day: sessionDay || null,
+        },
       },
     }).catch(() => {});
   };
