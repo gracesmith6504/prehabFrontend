@@ -142,6 +142,7 @@ function mapRiskLevel(composite: string): "Low" | "Medium" | "High" {
   return "Low";
 }
 
+
 // ============================================
 // Lovable AI (Gemini) — coach-friendly explanations
 // ============================================
@@ -1227,7 +1228,7 @@ Write the message now:`;
         // Apply escalation threshold: "high_only" means only escalate for High risk
         const thresholdScore = escalationThreshold === "high_only" ? 80 : 0;
 
-        if (riskLevel === "High" && riskScore > thresholdScore) {
+      if (riskLevel === "High" && riskScore >= 75 && riskScore > thresholdScore) {
           shouldEscalate = true;
           triggerReason = `risk_level=High (score: ${riskScore})`;
         } else if (riskProb > 0.8 && escalationThreshold !== "high_only") {
