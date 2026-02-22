@@ -79,7 +79,7 @@ export default function CycleSetup() {
     if (!user) return;
     setSaving(true);
     await supabase.from('athlete_profiles').update({
-      cycle_start_date: data.startDate,
+      cycle_start_date: data.lastPeriodStart,
       cycle_length: data.cycleLength,
       menstruation_length: data.menstruationLength,
     }).eq('user_id', user.id);

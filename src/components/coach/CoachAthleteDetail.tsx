@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { rewriteForCoach } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -363,7 +364,7 @@ export default function CoachAthleteDetail({ athleteId, athleteName, onBack }: P
               </div>
             </div>
 
-            {plan.explanation && <p className="text-sm text-muted-foreground mt-4 bg-secondary/30 rounded-lg p-3">{plan.explanation}</p>}
+            {plan.explanation && <p className="text-sm text-muted-foreground mt-4 bg-secondary/30 rounded-lg p-3">{rewriteForCoach(plan.explanation)}</p>}
 
             <div className="mt-4">
               <FeedbackButtons

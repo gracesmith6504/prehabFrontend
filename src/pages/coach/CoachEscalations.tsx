@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { rewriteForCoach } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import AppLayout from '@/components/AppLayout';
 import RiskBadge from '@/components/RiskBadge';
@@ -537,7 +538,7 @@ export default function CoachEscalations() {
                   <section className="space-y-2">
                     <h3 className="font-heading text-sm font-bold uppercase tracking-wider text-muted-foreground">Plan Adjustments Applied</h3>
                     <div className="text-sm text-foreground leading-relaxed rounded-lg border border-border bg-secondary/30 p-3">
-                      {selected.explanation}
+                      {rewriteForCoach(selected.explanation)}
                     </div>
                   </section>
                 )}
