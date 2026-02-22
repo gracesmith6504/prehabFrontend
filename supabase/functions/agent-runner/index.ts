@@ -135,10 +135,13 @@ async function callML(mlUrl: string, payload: any): Promise<AnalysisResponse> {
   return JSON.parse(respBody);
 }
 
+// ML model tiers: CRITICAL ≥75%, HIGH ≥55%, MEDIUM ≥35%, LOW <35%
+// Our UI tiers: High (escalation-worthy), Medium, Low
+// Only CRITICAL maps to High — HIGH maps to Medium to avoid over-escalation
 function mapRiskLevel(composite: string): "Low" | "Medium" | "High" {
   const lower = composite.toLowerCase();
-  if (lower.includes("high") || lower.includes("critical") || lower.includes("severe")) return "High";
-  if (lower.includes("medium") || lower.includes("moderate") || lower.includes("elevated")) return "Medium";
+  if (lower.includes("critical") || lower.includes("severe")) return "High";
+  if (lower.includes("high") || lower.includes("medium") || lower.includes("moderate") || lower.includes("elevated")) return "Medium";
   return "Low";
 }
 
