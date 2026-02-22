@@ -137,7 +137,11 @@
   }
 
   .glass-card {
-    @apply bg-card border border-border rounded-xl shadow-sm;
+    @apply bg-card border border-border rounded-xl shadow-sm transition-all duration-300 ease-out;
+  }
+  .glass-card:hover {
+    @apply shadow-md -translate-y-0.5;
+    border-color: hsl(var(--primary) / 0.3);
   }
 
   .risk-low {
