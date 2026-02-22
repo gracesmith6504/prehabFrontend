@@ -123,6 +123,7 @@ export type Database = {
       }
       athlete_profiles: {
         Row: {
+          autonomy_level: string
           coach_id: string | null
           contraceptive_use: boolean | null
           created_at: string
@@ -134,6 +135,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          autonomy_level?: string
           coach_id?: string | null
           contraceptive_use?: boolean | null
           created_at?: string
@@ -145,6 +147,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          autonomy_level?: string
           coach_id?: string | null
           contraceptive_use?: boolean | null
           created_at?: string

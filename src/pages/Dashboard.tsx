@@ -12,7 +12,6 @@ import PlanChanges from '@/components/PlanChanges';
 import { motion } from 'framer-motion';
 import {
   getCurrentPhase,
-  calculateAcuteChronicRatio,
   PHASE_MULTIPLIERS,
   type MenstrualPhase,
   type PlanSession,
@@ -82,12 +81,15 @@ export default function Dashboard() {
         setRiskConfidence(latestPrediction.confidence);
       }
 
-      // AC ratio for display only (from training sessions)
-      const since = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      const { data: sessions } = await supabase
-        .from('training_sessions').select('date, duration, rpe, intensity').eq('athlete_id', user.id).gte('date', since);
-      const ratio = calculateAcuteChronicRatio(sessions || []);
-      setAcRatio(ratio);
+      // AC ratio from latest risk report (source of truth)
+      const { data: latestReport } = await supabase
+        .from('risk_reports')
+        .select('acute_chronic_ratio')
+        .eq('athlete_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      setAcRatio(latestReport?.acute_chronic_ratio ?? 0);
 
       // Previous score for trend comparison (second most recent prediction)
       const { data: prevPredictions } = await supabase
