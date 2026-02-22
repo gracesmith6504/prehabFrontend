@@ -192,6 +192,63 @@ async function callGemini(prompt: string): Promise<string> {
 }
 
 // ============================================
+// Paid.ai signal recording
+// ============================================
+
+const PAID_AGENT_ID = "prehab-agent";
+
+async function recordPaidSignal(
+  eventName: string,
+  athleteId: string,
+  riskLevel: string,
+  planAdjusted: boolean,
+) {
+  const apiKey = Deno.env.get("PAID_API_KEY");
+  if (!apiKey) {
+    console.log(`[Paid.ai] PAID_API_KEY not set — skipping signal: ${eventName}`);
+    return;
+  }
+
+  const orderId = `order_${athleteId}_${new Date().toISOString().slice(0, 7).replace("-", "")}`;
+
+  try {
+    const resp = await fetch("https://api.paid.ai/v0/signals", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        signals: [{
+          eventName,
+          agentId: PAID_AGENT_ID,
+          customer: { externalCustomerId: athleteId },
+          orderId,
+          data: {
+            risk_level: riskLevel,
+            plan_adjusted: planAdjusted,
+            costData: {
+              vendor: "crusoe",
+              cost: { amount: 0.002, currency: "USD" },
+            },
+          },
+        }],
+      }),
+    });
+
+    if (!resp.ok) {
+      const body = await resp.text();
+      console.warn(`[Paid.ai] Signal failed [${resp.status}]: ${body}`);
+    } else {
+      await resp.text(); // consume body
+      console.log(`[Paid.ai] Signal recorded: ${eventName} for ${athleteId}`);
+    }
+  } catch (err: any) {
+    console.warn(`[Paid.ai] Failed to record signal: ${err.message}`);
+  }
+}
+
+// ============================================
 // AGENT TOOL: logAction
 // ============================================
 
@@ -1015,6 +1072,14 @@ Write the message now:`;
           results: goalResults,
         },
       });
+
+      // ===== Paid.ai usage signal =====
+      await recordPaidSignal(
+        "agent_run_completed",
+        state.uid,
+        riskLevel,
+        planModified,
+      );
 
       // ===== 4. REFLECT (closed-loop policy evaluation) =====
       const policyResult = await evaluateAdaptivePolicy(supabase, runId, state.uid, memory);
