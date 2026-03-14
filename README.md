@@ -184,15 +184,6 @@ public/                  # Static files served at root
 
 ---
 
-## Team
-
-| Name | Role |
-|------|------|
-| Grace Smith | Project Lead & Full-Stack Development |
-| *[Add team members here]* | *[Role]* |
-
----
-
 ## Acknowledgements
 
 - Research basis: Hewett et al. (2007), Gabbett (2016), Soligard et al. (2017)
