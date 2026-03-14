@@ -17,7 +17,7 @@ import CoachAnalytics from "./pages/coach/CoachAnalytics";
 import CoachPlans from "./pages/coach/CoachPlans";
 import CoachReports from "./pages/coach/CoachReports";
 import CoachSettings from "./pages/coach/CoachSettings";
-import TrainingHistory from "./pages/TrainingHistory";
+
 import NotFound from "./pages/NotFound";
 import { ReactNode } from "react";
 
