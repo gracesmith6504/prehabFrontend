@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Watch } from 'lucide-react';
 
-const WEARABLE_API = 'https://prehab-257842861798.europe-west1.run.app';
+const WEARABLE_API = import.meta.env.VITE_WEARABLE_API_URL || 'https://prehab-257842861798.europe-west1.run.app';
 
 // Heart path — starts at top-centre dip, fills clockwise
 // viewBox 0 0 200 175, heart centre ~(100, 90)
