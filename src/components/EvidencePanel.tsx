@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BookOpen, ChevronDown, ChevronUp } from 'lucide-react';
 
-const EVIDENCE_API = 'https://prehab-257842861798.europe-west1.run.app';
+const EVIDENCE_API = import.meta.env.VITE_WEARABLE_API_URL || 'https://prehab-257842861798.europe-west1.run.app';
 
 interface Citation {
   authors: string;

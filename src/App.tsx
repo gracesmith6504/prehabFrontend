@@ -9,8 +9,6 @@ import Home from "./pages/Home";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import CycleSetup from "./pages/CycleSetup";
-import TrainingLog from "./pages/TrainingLog";
-import SorenessLog from "./pages/SorenessLog";
 import PlanView from "./pages/PlanView";
 import RiskReport from "./pages/RiskReport";
 import CoachDashboard from "./pages/CoachDashboard";
@@ -19,7 +17,7 @@ import CoachAnalytics from "./pages/coach/CoachAnalytics";
 import CoachPlans from "./pages/coach/CoachPlans";
 import CoachReports from "./pages/coach/CoachReports";
 import CoachSettings from "./pages/coach/CoachSettings";
-import TrainingHistory from "./pages/TrainingHistory";
+
 import NotFound from "./pages/NotFound";
 import { ReactNode } from "react";
 

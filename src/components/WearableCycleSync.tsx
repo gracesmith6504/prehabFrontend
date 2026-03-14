@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { RefreshCw, Watch, CheckCircle2, AlertCircle } from 'lucide-react';
 
 const SAMSUNG_GREEN = '#1DBE6E';
-const WEARABLE_API = 'https://prehab-257842861798.europe-west1.run.app';
+const WEARABLE_API = import.meta.env.VITE_WEARABLE_API_URL || 'https://prehab-257842861798.europe-west1.run.app';
 
 interface CycleWearableData {
   lastPeriodStart: string;
