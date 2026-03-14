@@ -9,8 +9,6 @@ import Home from "./pages/Home";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import CycleSetup from "./pages/CycleSetup";
-import TrainingLog from "./pages/TrainingLog";
-import SorenessLog from "./pages/SorenessLog";
 import PlanView from "./pages/PlanView";
 import RiskReport from "./pages/RiskReport";
 import CoachDashboard from "./pages/CoachDashboard";
